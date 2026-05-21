@@ -4,6 +4,8 @@ __pycache__/
 .DS_Store
 # Private context / inspiration — never share publicly with reviewers
 _private/
+# Local-only guidance for Claude Code; kept out of the public repo
+CLAUDE.md
 reports/*.txt
 reports/*.md
 reports/*.html
