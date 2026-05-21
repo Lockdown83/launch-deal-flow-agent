@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import REPO_ROOT, get_settings
 from .dashboard import render_dashboard
-from .emailer import send_gmail
+from .emailer import send_email
 from .metrics import build_metrics
 from .outbound import build_drafts
 from .report import format_report
@@ -70,7 +70,7 @@ def main() -> None:
 
     if args.email:
         subject = f"LAUNCH Deal Flow Brief - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-        send_gmail(settings, subject=subject, body=body)
+        send_email(settings, subject=subject, body=body)
         print(f"Emailed report to {settings.email_to}")
     else:
         print("Email not sent. Use --email after configuring .env Gmail settings.")

@@ -29,6 +29,9 @@ class Settings:
     email_to: str
     email_from: str | None
     min_score: float
+    # Resend HTTP email API (works on cloud hosts that block SMTP). Preferred when set.
+    resend_api_key: str | None
+    resend_from: str
 
 
 def get_settings() -> Settings:
@@ -41,4 +44,6 @@ def get_settings() -> Settings:
         email_to=os.getenv("EMAIL_TO", "andrewdimaulozx@gmail.com"),
         email_from=email_from,
         min_score=float(os.getenv("MIN_SCORE", "2.0")),
+        resend_api_key=os.getenv("RESEND_API_KEY"),
+        resend_from=os.getenv("RESEND_FROM", "onboarding@resend.dev"),
     )

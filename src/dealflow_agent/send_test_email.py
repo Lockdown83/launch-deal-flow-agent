@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 from .config import get_settings
-from .emailer import send_gmail
+from .emailer import send_email
 
 
 def main() -> None:
@@ -13,7 +13,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = get_settings()
-    send_gmail(settings, subject=args.subject, body=args.body)
+    send_email(settings, subject=args.subject, body=args.body)
     print(f"Sent test email to {settings.email_to}")
 
 

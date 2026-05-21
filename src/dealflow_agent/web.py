@@ -11,7 +11,7 @@ from flask import Flask, redirect, request, url_for
 
 from .config import get_settings
 from .dashboard import render_dashboard
-from .emailer import send_gmail
+from .emailer import send_email
 from .metrics import build_metrics
 from .outbound import build_drafts
 from .report import format_report
@@ -161,7 +161,7 @@ def request_report():
     try:
         settings = get_settings()
         subject = f"LAUNCHY Deal Flow Brief — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-        send_gmail(settings, subject=subject, body=brief, to=email)
+        send_email(settings, subject=subject, body=brief, to=email)
     except Exception as exc:
         app.logger.exception("email send failed: %s", exc)
         return redirect(url_for("index", sent="err"))
