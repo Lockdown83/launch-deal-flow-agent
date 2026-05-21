@@ -6,7 +6,6 @@ __pycache__/
 _private/
 reports/*.txt
 reports/*.md
-reports/dashboard-2*.html
+reports/*.html
 !reports/.gitkeep
-!reports/dashboard-latest.html
 data/*.db

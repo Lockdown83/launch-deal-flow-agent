@@ -96,7 +96,7 @@ _WARMING_PAGE = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="6">
-<title>MEMOSONI — warming up</title>
+<title>LAUNCHY — warming up</title>
 <style>
   body { margin:0; background:#0a0a0f; color:#39FF14; height:100vh; display:flex;
     align-items:center; justify-content:center; text-align:center;
@@ -107,7 +107,7 @@ _WARMING_PAGE = """<!DOCTYPE html>
   .blink { animation: b 1.2s steps(2) infinite; } @keyframes b { 50% { opacity:0; } }
 </style></head>
 <body><div class="box">
-  <h1>&#9658; MEMOSONI BOOTING<span class="blink">_</span></h1>
+  <h1>&#9658; LAUNCHY BOOTING<span class="blink">_</span></h1>
   <p>First scan in progress — pulling live signals from Sequoia, a16z, YC, GitHub,
   SEC EDGAR &amp; Hacker News. This page refreshes automatically.</p>
 </div></body></html>"""
@@ -160,7 +160,7 @@ def request_report():
         return redirect(url_for("index", sent="err"))
     try:
         settings = get_settings()
-        subject = f"MEMOSONI Deal Flow Brief — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+        subject = f"LAUNCHY Deal Flow Brief — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
         send_gmail(settings, subject=subject, body=brief, to=email)
     except Exception as exc:
         app.logger.exception("email send failed: %s", exc)
