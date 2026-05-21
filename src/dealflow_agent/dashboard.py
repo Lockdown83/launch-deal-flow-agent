@@ -9,14 +9,17 @@ from .models import FunnelMetrics, Opportunity, OutboundDraft, TrendPoint
 
 _SOURCE_RE = re.compile(r"^(?P<label>.*) \((?P<url>https?://[^)]+)\)\s*$")
 
-# Tab favicon — inline SVG (no external file): dark arcade tile + neon green->cyan "L".
+# Tab favicon — inline SVG (no external file): LAUNCH's rocketship, white on brand orange.
 _FAVICON_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
-    '<defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">'
-    '<stop offset="0" stop-color="#39FF14"/><stop offset="1" stop-color="#3DD6FF"/></linearGradient></defs>'
-    '<rect width="32" height="32" rx="7" fill="#0a0a0f"/>'
-    '<rect x="1.25" y="1.25" width="29.5" height="29.5" rx="6" fill="none" stroke="#39FF14" stroke-opacity="0.55" stroke-width="1.5"/>'
-    '<g fill="url(#lg)"><rect x="10.5" y="7" width="5.5" height="18"/><rect x="10.5" y="19.5" width="12.5" height="5.5"/></g>'
+    '<rect width="32" height="32" rx="7" fill="#E8923C"/>'
+    '<g fill="#ffffff">'
+    '<path d="M16 4.3c3 0 4.9 3.6 4.9 8.2v6.2h-9.8v-6.2C11.1 7.9 13 4.3 16 4.3z"/>'
+    '<path d="M11.1 15.2 7.7 21l3.4-1.7z"/>'
+    '<path d="M20.9 15.2 24.3 21l-3.4-1.7z"/>'
+    '<path d="M13.3 18.7h5.4L16 24.4z"/>'
+    "</g>"
+    '<circle cx="16" cy="11" r="2" fill="#E8923C"/>'
     "</svg>"
 )
 _FAVICON_HREF = "data:image/svg+xml," + urllib.parse.quote(_FAVICON_SVG)
