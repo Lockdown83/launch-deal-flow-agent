@@ -1,0 +1,14 @@
+# LAUNCH Deal Flow Agent — sample crontab
+# The agent has no long-running daemon/heartbeat: it is cron-driven. Scans append to
+# SQLite; the daily job compiles the brief, refreshes the dashboard, and emails the digest.
+#
+# Install with:  crontab cron/crontab.sample   (edit the REPO path first)
+# Logs go to reports/cron.log
+
+REPO=/Users/andrewdimaulo/launch-deal-flow-agent
+
+# Intake scans — a few times a day to catch fresh signals (report only, no email).
+0 8,13,18 * * *  cd $REPO && PYTHONPATH=src python3 -m dealflow_agent.run_daily --no-email >> reports/cron.log 2>&1
+
+# Daily digest — compile + email the brief once each morning.
+0 7 * * *        cd $REPO && PYTHONPATH=src python3 -m dealflow_agent.run_daily --email >> reports/cron.log 2>&1

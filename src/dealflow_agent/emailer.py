@@ -6,8 +6,12 @@ from email.message import EmailMessage
 from .config import Settings
 
 
-def send_gmail(settings: Settings, subject: str, body: str) -> None:
-    """Send an email via Gmail SMTP using an App Password."""
+def send_gmail(settings: Settings, subject: str, body: str, to: str | None = None) -> None:
+    """Send an email via Gmail SMTP using an App Password.
+
+    `to` overrides the default recipient (used by the web 'request a brief' form so a
+    reviewer gets the report at their own address).
+    """
     missing = []
     if not settings.gmail_user:
         missing.append("GMAIL_USER")
@@ -32,7 +36,7 @@ def send_gmail(settings: Settings, subject: str, body: str) -> None:
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = email_from
-    msg["To"] = settings.email_to
+    msg["To"] = to or settings.email_to
     msg.set_content(body)
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:

@@ -10,26 +10,13 @@ import urllib.request
 from datetime import timedelta
 from urllib.parse import urlparse
 
+from . import source_edgar, source_github, source_yc
 from .models import Signal, now_utc, parse_rss_date
 
 SEQUOIA_RSS = "https://www.sequoiacap.com/feed/"
 YC_RSS = "https://www.ycombinator.com/blog/rss"
 A16Z_NEWS = "https://a16z.com/news-content/"
 HN_SEARCH = "https://hn.algolia.com/api/v1/search_by_date"
-
-YC_DIRECTORY_SEED_SIGNALS = [
-    ("Moda", "The monitoring layer your AI agents need.", "AI agent infrastructure"),
-    ("Rubric AI", "Reasoning and verification infra for AI.", "AI agent infrastructure"),
-    ("Carrot Labs", "Continuous Fine-Tuning for AI Models.", "AI agent infrastructure"),
-    ("Wayco", "AI operator for medlegal cases.", "Vertical AI operator"),
-    ("Copperlane", "Agentic Mortgage Origination.", "Vertical fintech AI"),
-    ("Condor Energy", "Software for enterprise energy procurement.", "Energy software"),
-    ("Squid", "AI agents for power grid planning.", "Energy software"),
-    ("Canary", "The first AI QA engineer that understands your code.", "AI software tooling"),
-    ("Maven", "Payments Infrastructure for Voice Agents.", "Fintech infrastructure"),
-    ("Fixture", "An AI-first CRM built for Startups.", "AI-native SaaS"),
-]
-
 
 def fetch_text(url: str, timeout: int = 25) -> str:
     """Fetch text with stdlib only. Falls back for local macOS cert issues."""
@@ -167,24 +154,6 @@ def collect_a16z_news() -> list[Signal]:
     return signals
 
 
-def collect_yc_directory_seed() -> list[Signal]:
-    observed_at = now_utc() - timedelta(days=3)
-    return [
-        Signal(
-            company=company,
-            source="YC startup directory seed scan",
-            signal_type="direct_announcement",
-            title=f"{company}: {description}",
-            url="https://www.ycombinator.com/companies",
-            observed_at=observed_at,
-            description=description,
-            category=category,
-            stage="YC W26 / pre-seed",
-        )
-        for company, description, category in YC_DIRECTORY_SEED_SIGNALS
-    ]
-
-
 def _company_matches_hn_hit(company: str, title: str, url: str) -> bool:
     """Avoid false positives for generic names like Canary, Hilbert, or Glimpse."""
     normalized = re.sub(r"[^a-z0-9]", "", company.lower())
@@ -224,17 +193,24 @@ def collect_hn_for(companies: list[str]) -> list[Signal]:
                 continue
             if not _company_matches_hn_hit(company, title, url):
                 continue
+            # Link to the HN discussion permalink, never the external article URL:
+            # aggregator/roundup posts can point at an unrelated company and break trust.
+            object_id = hit.get("objectID")
+            hn_url = f"https://news.ycombinator.com/item?id={object_id}" if object_id else "https://news.ycombinator.com/"
+            points = hit.get("points") or 0
             results.append(
                 Signal(
                     company=company,
                     source="Hacker News Algolia",
                     signal_type="founder_community",
                     title=title,
-                    url=url or "https://news.ycombinator.com/",
+                    url=hn_url,
                     observed_at=observed_at,
-                    description=f"HN points: {hit.get('points') or 0}",
+                    description=f"HN points: {points}",
                     category="Founder/community validation",
                     stage="Unconfirmed",
+                    metric_label="HN points",
+                    metric_value=float(points),
                 )
             )
             added_for_company += 1
@@ -243,13 +219,66 @@ def collect_hn_for(companies: list[str]) -> list[Signal]:
     return results
 
 
+# For deal sourcing we want EMERGING repos gaining traction, not established giants
+# (n8n / ollama / transformers aren't deal flow). Keep a sane star band and a cap.
+GITHUB_STAR_FLOOR = 400.0
+GITHUB_STAR_CEILING = 15000.0
+GITHUB_CAP = 12
+A16Z_CAP = 8
+HN_ENRICH_CAP = 40
+
+
+def _emerging_github(signals: list[Signal]) -> list[Signal]:
+    kept = [
+        s for s in signals
+        if s.metric_value is None or GITHUB_STAR_FLOOR <= s.metric_value <= GITHUB_STAR_CEILING
+    ]
+    kept.sort(key=lambda s: s.metric_value or 0.0, reverse=True)
+    return kept[:GITHUB_CAP]
+
+
 def collect_all_signals() -> list[Signal]:
+    """Aggregate every source. Required by brief: Sequoia + a16z + YC.
+    Added for breadth/depth: live YC directory, GitHub traction, SEC Form D, HN validation.
+    """
     signals: list[Signal] = []
-    for collector in [collect_sequoia, collect_yc_blog, collect_a16z_news, collect_yc_directory_seed]:
+
+    # Brief-required firm sources.
+    for collector in [collect_sequoia, collect_yc_blog, collect_a16z_news]:
         try:
-            signals.extend(collector())
+            collected = collector()
+            if collector is collect_a16z_news:
+                collected = collected[:A16Z_CAP]
+            signals.extend(collected)
         except Exception as exc:
             print(f"WARN: {collector.__name__} failed: {exc}")
-    companies = sorted({signal.company for signal in signals})
-    signals.extend(collect_hn_for(companies))
+
+    # New real sources (each is self-guarded and returns [] on failure).
+    # YC directory presence alone is weak signal (every batch company is "in" YC).
+    # Demote it to context-weight so a YC company only surfaces as a qualified deal
+    # when it CONVERGES with another signal (HN/GitHub) or carries real traction.
+    try:
+        yc_live = source_yc.collect()
+        for s in yc_live:
+            s.signal_type = "portfolio_momentum"
+        signals.extend(yc_live)
+    except Exception as exc:
+        print(f"WARN: source_yc failed: {exc}")
+    try:
+        signals.extend(_emerging_github(source_github.collect()))
+    except Exception as exc:
+        print(f"WARN: source_github failed: {exc}")
+    try:
+        signals.extend(source_edgar.collect())
+    except Exception as exc:
+        print(f"WARN: source_edgar failed: {exc}")
+
+    # HN validation: enrich only the named "deal" companies (skip the GitHub repo bulk,
+    # which already carries its own traction metric), and cap the number of API calls.
+    deal_companies = [
+        s.company for s in signals if s.source != "GitHub trending API"
+    ]
+    seen: set[str] = set()
+    ordered_unique = [c for c in deal_companies if not (c in seen or seen.add(c))]
+    signals.extend(collect_hn_for(ordered_unique[:HN_ENRICH_CAP]))
     return signals

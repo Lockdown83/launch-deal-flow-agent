@@ -2,7 +2,11 @@
 __pycache__/
 *.pyc
 .DS_Store
+# Private context / inspiration — never share publicly with reviewers
+_private/
 reports/*.txt
 reports/*.md
+reports/dashboard-2*.html
 !reports/.gitkeep
+!reports/dashboard-latest.html
 data/*.db
