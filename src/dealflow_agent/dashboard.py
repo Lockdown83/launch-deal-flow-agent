@@ -462,24 +462,28 @@ body::after {
 @media (max-width: 720px) { .repo-link-credit, .repo-link-divider { display: none; } }
 @media (max-width: 560px) { .repo-link .repo-link-text { display: none; } .repo-link { padding: 9px; } }
 
-/* HUD bar */
-.hud {
-  display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; justify-content: center;
-  font-family: var(--pixel); font-size: 12px; letter-spacing: .06em;
-  background: #050507;
-  border: 1px solid rgba(57,255,20,.55);
-  border-radius: 14px;
-  padding: 15px 20px;
+/* NYSE-style scrolling ticker tape */
+.ticker {
+  position: relative; background: #050507;
+  border: 1px solid rgba(57,255,20,.55); border-radius: 14px;
   box-shadow: 0 0 28px rgba(57,255,20,.16), inset 0 1px 0 rgba(57,255,20,.18);
-  text-transform: uppercase;
-  line-height: 1.4;
+  overflow: hidden; padding: 13px 0; white-space: nowrap; text-transform: uppercase;
 }
-.hud-item { white-space: nowrap; }
-.hud-key { color: var(--muted); }
-.hud-score { color: var(--amber); text-shadow: 0 0 8px rgba(255,227,77,.6); }
-.hud-lvl { color: var(--pink); text-shadow: 0 0 8px rgba(255,61,154,.6); }
-.hud-fund { color: var(--green); text-shadow: 0 0 8px rgba(57,255,20,.6); }
-.hud-sep { color: #33334a; }
+/* fade the edges like a real ticker tape */
+.ticker::before, .ticker::after { content: ""; position: absolute; top: 0; bottom: 0; width: 56px; z-index: 2; pointer-events: none; }
+.ticker::before { left: 0; background: linear-gradient(90deg, #050507, rgba(5,5,7,0)); }
+.ticker::after { right: 0; background: linear-gradient(270deg, #050507, rgba(5,5,7,0)); }
+.ticker-track { display: inline-block; white-space: nowrap; animation: ticker-scroll 48s linear infinite; will-change: transform; }
+.ticker:hover .ticker-track { animation-play-state: paused; }
+@keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.tick { display: inline-flex; align-items: baseline; gap: 8px; padding: 0 2px; }
+.tick-k { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; color: var(--muted); }
+.tick-sym { font-family: var(--mono); font-size: 12px; letter-spacing: .04em; color: var(--text); }
+.tick-v { font-family: var(--pixel); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tick-v.amber { color: var(--amber); } .tick-v.pink { color: var(--pink); }
+.tick-v.green { color: var(--green); } .tick-v.cyan { color: var(--cyan); } .tick-v.base { color: var(--muted); }
+.tick-sep { color: #2a3650; margin: 0 18px; }
+@media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; } }
 
 /* Title block */
 .brand { font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
@@ -739,14 +743,33 @@ def render_dashboard(
     score = _composite_score(metrics, opportunities)
     lvl_no, lvl_name = _current_level(metrics)
     fund = _fund_value(metrics)
-    hud = f"""
-    <div class="hud">
-      <span class="hud-item"><span class="hud-key">SCORE:</span> <span class="hud-score">{score:,}</span></span>
-      <span class="hud-sep">&middot;</span>
-      <span class="hud-item"><span class="hud-key">LVL {lvl_no}:</span> <span class="hud-lvl">{html.escape(lvl_name)}</span></span>
-      <span class="hud-sep">&middot;</span>
-      <span class="hud-item"><span class="hud-key">FUND:</span> <span class="hud-fund">{html.escape(fund)}</span></span>
-    </div>"""
+    # NYSE-style ticker tape: funnel metrics + top deals as ticker "symbols"
+    _tier_cls = {"high": "pink", "mid": "cyan", "base": "base"}
+    cells = [
+        f'<span class="tick"><span class="tick-k">SCORE</span><span class="tick-v amber">{score:,}</span></span>',
+        f'<span class="tick"><span class="tick-k">LVL {lvl_no}</span><span class="tick-v pink">{html.escape(lvl_name)}</span></span>',
+        f'<span class="tick"><span class="tick-k">FUND</span><span class="tick-v green">{html.escape(fund)}</span></span>',
+        f'<span class="tick"><span class="tick-k">SIGNALS</span><span class="tick-v">{metrics.signals_ingested:,}</span></span>',
+        f'<span class="tick"><span class="tick-k">TRACKED</span><span class="tick-v">{metrics.companies_tracked:,}</span></span>',
+        f'<span class="tick"><span class="tick-k">QUALIFIED</span><span class="tick-v cyan">{metrics.qualified_deals}</span></span>',
+    ]
+    netnew = str(metrics.net_new_qualified_7d)
+    if metrics.new_companies_this_run:
+        netnew += f" &#9650;+{metrics.new_companies_this_run}"
+    cells.append(f'<span class="tick"><span class="tick-k">NET-NEW 7D</span><span class="tick-v green">{netnew}</span></span>')
+    cells.append(f'<span class="tick"><span class="tick-k">REPEAT</span><span class="tick-v">{metrics.repeat_signal_companies}</span></span>')
+    if metrics.top_category:
+        cells.append(f'<span class="tick"><span class="tick-k">SECTOR</span><span class="tick-v base">{html.escape(metrics.top_category.upper())}</span></span>')
+    for opp in opportunities[:6]:
+        cls = _tier_cls.get(_score_tier(opp.score), "base")
+        arrow = " &#9650;" if opp.score >= 3.0 else ""
+        cells.append(
+            f'<span class="tick"><span class="tick-sym">{html.escape(opp.company.upper())}</span>'
+            f'<span class="tick-v {cls}">{opp.score:.1f}{arrow}</span></span>'
+        )
+    _half = '<span class="tick-sep">&#9670;</span>'.join(cells) + '<span class="tick-sep">&#9670;</span>'
+    # Track is duplicated so the -50% scroll loops seamlessly.
+    hud = f'<div class="ticker"><div class="ticker-track">{_half}{_half}</div></div>'
 
     # North-star HIGH SCORE hero
     delta = metrics.new_companies_this_run
