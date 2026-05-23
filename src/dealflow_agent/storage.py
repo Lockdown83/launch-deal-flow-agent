@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -9,7 +10,9 @@ from typing import Iterator
 from .config import REPO_ROOT
 from .models import Opportunity, Signal, TrendPoint, parse_rss_date
 
-DB_PATH = REPO_ROOT / "data" / "dealflow.db"
+# Default to the repo's data/ dir locally. On Railway, set DEALFLOW_DB_PATH to a path on a mounted
+# persistent Volume (e.g. /data/dealflow.db) so run-over-run history survives redeploys.
+DB_PATH = Path(os.getenv("DEALFLOW_DB_PATH") or (REPO_ROOT / "data" / "dealflow.db"))
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS signals (

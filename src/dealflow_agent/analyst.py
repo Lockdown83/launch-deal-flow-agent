@@ -76,10 +76,11 @@ def _chat(settings: Settings, system: str, user: str, *, max_tokens: int, temper
             return (body["choices"][0]["message"]["content"] or "").strip()
         except urllib.error.HTTPError as exc:
             text = exc.read().decode("utf-8", "ignore")
-            # 5xx (e.g. NIM's intermittent "Already borrowed") is transient — retry; 4xx is not.
-            if exc.code >= 500 and attempt < 2:
+            # 429 (rate limit) + 5xx (e.g. NIM's intermittent "Already borrowed") are transient —
+            # back off and retry (longer pause for 429). Other 4xx (bad model id etc.) is fatal.
+            if (exc.code == 429 or exc.code >= 500) and attempt < 2:
                 last_exc = RuntimeError(f"NIM API error {exc.code}: {text}")
-                time.sleep(1.5 * (attempt + 1))
+                time.sleep((3.0 if exc.code == 429 else 1.5) * (attempt + 1))
                 continue
             raise RuntimeError(f"NIM API error {exc.code}: {text}") from exc
         except (TimeoutError, urllib.error.URLError) as exc:
@@ -198,6 +199,45 @@ def editor_note(settings: Settings, opportunities: list[Opportunity]) -> str:
         return _chat(settings, _EDITOR_SYSTEM, user, max_tokens=220, temperature=0.5)
     except Exception as exc:  # noqa: BLE001
         print(f"WARN: NIM editor note failed: {exc}")
+        return ""
+
+
+_ASK_SYSTEM = (
+    "You are LAUNCHY, LAUNCH's deal-flow agent. Answer the user's question using ONLY the deal data "
+    "provided below. Be concise and specific, name companies, and cite the verdict or signal when it "
+    "helps. If the answer isn't in the data, say so plainly. No markdown, no preamble."
+)
+
+
+def answer_question(
+    settings: Settings, question: str, opportunities: list[Opportunity], editor_note: str = ""
+) -> str:
+    """Answer a free-form question grounded in the current deal board (the 'Ask LAUNCHY' feature).
+
+    Returns "" when no key is set, the question is empty, or the call fails — the caller turns that
+    into a friendly offline message.
+    """
+    if not settings.nim_api_key:
+        return ""
+    q = (question or "").strip()[:500]
+    if not q:
+        return ""
+    top = opportunities[:15]
+    board = "\n".join(
+        f"- {o.company} | {o.category} | verdict={o.verdict or 'n/a'} | score={o.score} | "
+        f"{o.one_liner or o.why_it_matters[:80]} | why_now: {o.why_now or 'n/a'} | "
+        f"risk: {o.key_risk or 'n/a'}"
+        for o in top
+    )
+    context = (f"This week's editor note: {editor_note}\n\n" if editor_note else "")
+    user = (
+        f"{context}This week's qualified deal board (top {len(top)} of {len(opportunities)}):\n"
+        f"{board}\n\nQuestion: {q}\n\nAnswer in 1-4 sentences."
+    )
+    try:
+        return _chat(settings, _ASK_SYSTEM, user, max_tokens=320, temperature=0.4)
+    except Exception as exc:  # noqa: BLE001
+        print(f"WARN: NIM ask failed: {exc}")
         return ""
 
 

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, redirect, request, url_for
 
-from .analyst import editor_note, enrich_rationale
+from .analyst import answer_question, editor_note, enrich_rationale
 from .config import get_settings
 from .dashboard import render_dashboard
 from .emailer import send_email
@@ -26,6 +26,8 @@ app = Flask(__name__)
 REFRESH_HOURS = float(os.getenv("REFRESH_HOURS", "6"))
 # Light abuse guard for the public email form: cap global sends per rolling hour.
 _MAX_SENDS_PER_HOUR = int(os.getenv("MAX_SENDS_PER_HOUR", "40"))
+# Abuse guard for the public Ask LAUNCHY endpoint (caps NIM calls from the open form).
+_MAX_ASKS_PER_HOUR = int(os.getenv("MAX_ASKS_PER_HOUR", "60"))
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -42,6 +44,7 @@ _cache: dict = {
 }
 _lock = threading.Lock()
 _send_times: deque[float] = deque()
+_ask_times: deque[float] = deque()
 _started = False
 _start_lock = threading.Lock()
 
@@ -130,6 +133,16 @@ def _rate_ok() -> bool:
     return True
 
 
+def _ask_ok() -> bool:
+    now = time.time()
+    while _ask_times and now - _ask_times[0] > 3600:
+        _ask_times.popleft()
+    if len(_ask_times) >= _MAX_ASKS_PER_HOUR:
+        return False
+    _ask_times.append(now)
+    return True
+
+
 @app.get("/")
 def index() -> str:
     _ensure_background_started()
@@ -175,6 +188,31 @@ def request_report():
         app.logger.exception("email send failed: %s", exc)
         return redirect(url_for("index", sent="err"))
     return redirect(url_for("index", sent="1"))
+
+
+@app.post("/ask")
+def ask():
+    """Ask LAUNCHY: answer a free-form question grounded in the current deal board. Public + guarded."""
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or request.form.get("question") or "").strip()
+    if not question:
+        return {"answer": "Ask me something about this week's board."}
+    if not _ask_ok():
+        return {"answer": "Too many questions right now — give it a minute and try again."}
+    with _lock:
+        opps = list(_cache["opps"])
+        note = _cache["editor_note"]
+        ready = _cache["ready"]
+    if not ready:
+        return {"answer": "Still warming up — the first scan isn't done yet. Try again in a moment."}
+    try:
+        ans = answer_question(get_settings(), question, opps, editor_note=note)
+    except Exception as exc:
+        app.logger.exception("ask failed: %s", exc)
+        ans = ""
+    if not ans:
+        ans = "Ask LAUNCHY is offline here (no model key configured) — it answers live on the deployed site."
+    return {"answer": ans}
 
 
 @app.get("/health")

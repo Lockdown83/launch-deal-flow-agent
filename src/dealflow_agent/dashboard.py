@@ -786,6 +786,26 @@ footer { color: var(--muted); font-size: 12px; margin-top: 48px; text-align: cen
 .cta-notice--ok { color: var(--green); background: rgba(57,255,20,.08); border: 1px solid rgba(57,255,20,.4); }
 .cta-notice--err { color: var(--pink); background: rgba(255,61,154,.08); border: 1px solid rgba(255,61,154,.4); }
 
+/* ASK LAUNCHY — arcade chat terminal (web mode only) */
+.ask { margin: 14px 0 8px; border-radius: 16px; padding: 26px 28px;
+  background: linear-gradient(180deg, rgba(61,214,255,.07) 0%, rgba(61,214,255,0) 45%), var(--panel);
+  border: 1px solid rgba(61,214,255,.5);
+  box-shadow: 0 0 30px rgba(61,214,255,.13), inset 0 1px 0 rgba(61,214,255,.2); }
+.ask-title { display: block; font-family: var(--pixel); font-size: 14px; color: var(--green); letter-spacing: .03em; line-height: 1.4; }
+.ask-sub { display: block; font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 11px; }
+.ask-form { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+.ask-field { flex: 1; min-width: 220px; font-family: var(--mono); font-size: 15px; color: var(--green);
+  background: #050507; border: 1px solid rgba(61,214,255,.4); border-radius: 12px; padding: 14px 16px; outline: none; }
+.ask-field:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(61,214,255,.12); }
+.ask-field::placeholder { color: #5a5f70; }
+.ask-btn { font-family: var(--pixel); font-size: 12px; letter-spacing: .04em; cursor: pointer;
+  color: #03121a; background: var(--cyan); border: none; border-radius: 12px; padding: 14px 22px;
+  text-transform: uppercase; box-shadow: 0 0 22px rgba(61,214,255,.35); transition: transform .1s ease; }
+.ask-btn:hover { transform: translateY(-1px); }
+.ask-btn:disabled { opacity: .55; cursor: progress; transform: none; }
+.ask-answer { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(61,214,255,.25);
+  font: 14px/1.7 var(--mono); color: #cfd3de; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.7em; }
+
 @media (max-width: 860px) {
   .funnel { grid-template-columns: repeat(2, 1fr); }
 }
@@ -806,6 +826,51 @@ def _editor_note_section(note: str) -> str:
       <div class="editor-note-title">&#9658; WHAT MATTERS THIS WEEK</div>
       <p class="editor-note-body">{html.escape(note)}</p>
     </section>'''
+
+
+def _ask_section() -> str:
+    """ASK LAUNCHY — an arcade chat terminal that POSTs to /ask (web mode only)."""
+    return """
+    <section class="ask">
+      <span class="ask-title">&#9658; ASK LAUNCHY</span>
+      <span class="ask-sub">Interrogate the agent about this week's board.</span>
+      <div class="ask-form">
+        <input class="ask-field" id="ask-input" type="text"
+          placeholder="e.g. What's the most urgent deal this week?"
+          aria-label="ask the agent a question" autocomplete="off">
+        <button class="ask-btn" id="ask-send" type="button">&#9658; SEND</button>
+      </div>
+      <div class="ask-answer" id="ask-answer" aria-live="polite">&#9658; insert a question to begin.</div>
+    </section>"""
+
+
+# Vanilla-JS handler for ASK LAUNCHY. Posts the question to /ask, renders the
+# answer via textContent (never innerHTML) to avoid XSS. Rendered web-mode only.
+_ASK_SCRIPT = """  <script>
+  (function () {
+    var input = document.getElementById('ask-input');
+    var btn = document.getElementById('ask-send');
+    var out = document.getElementById('ask-answer');
+    if (!input || !btn || !out) return;
+    function ask() {
+      var q = input.value.trim();
+      if (!q) return;
+      btn.disabled = true;
+      out.textContent = '\\u25BA thinking\\u2026';
+      fetch('/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { out.textContent = (data && data.answer) || ''; })
+        .catch(function () { out.textContent = 'Ask LAUNCHY is live only on the running site.'; })
+        .finally(function () { btn.disabled = false; });
+    }
+    btn.addEventListener('click', ask);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
+  })();
+  </script>"""
 
 
 def render_dashboard(
@@ -909,8 +974,10 @@ def render_dashboard(
             "No outbound drafted this run.</p>"
         )
 
-    # Web-mode interactive pieces: LIVE badge + 'email me the brief' CTA
+    # Web-mode interactive pieces: LIVE badge + 'email me the brief' CTA + ASK LAUNCHY
     live_badge = '<span class="live-badge">LIVE</span>' if include_email_form else ""
+    ask_block = _ask_section() if include_email_form else ""
+    ask_script = _ASK_SCRIPT if include_email_form else ""
     cta_block = ""
     if include_email_form:
         notice_html = ""
@@ -959,6 +1026,7 @@ def render_dashboard(
     {hero}
     {editor_block}
     {cta_block}
+    {ask_block}
 
     <p class="section-label">&#9658; THE FUNNEL: REACH &rarr; RESEARCH &rarr; QUALITY &rarr; ACTION</p>
     <span class="section-sub">four stages, one north star &mdash; every level answers a question</span>
@@ -976,5 +1044,6 @@ def render_dashboard(
 
     <footer>LAUNCHY &middot; YOUR VC DEAL-FLOW AGENT &middot; {now}<br>OUTBOUND IS DRAFTED, NEVER AUTO-SENT. &#9658; INSERT COIN TO CONTINUE</footer>
   </main>
+  {ask_script}
 </body>
 </html>"""
