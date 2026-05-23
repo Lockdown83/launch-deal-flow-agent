@@ -116,12 +116,13 @@ All config comes from environment variables (a local `.env` is auto-loaded). Eve
 | `RESEND_API_KEY`, `RESEND_FROM` | Outbound email via the Resend HTTP API |
 | `EMAIL_TO` | Default recipient for the CLI/cron digest (the web form sends to the visitor's address) |
 | `GITHUB_TOKEN` | Optional — raises GitHub API rate limits |
+| `DEALFLOW_DB_PATH` | SQLite file path (default `data/dealflow.db`); point at a mounted volume to persist on Railway |
 
 `.env` and `data/*.db` are gitignored. Never commit secrets.
 
 ## Deploy
 
-Deployed on **Railway** via the same gunicorn command (`Procfile` / `railway.json`, NIXPACKS builder). **Pushing to `main` auto-deploys.** Runs as a single worker with one background scrape thread; environment variables (including `NVIDIA_API_KEY` and the Resend keys) are set in the Railway dashboard, not committed. SQLite persists across deploys via a volume mounted at `/app/data`.
+Deployed on **Railway** via the same gunicorn command (`Procfile` / `railway.json`, NIXPACKS builder). **Pushing to `main` auto-deploys.** Runs as a single worker with one background scrape thread; environment variables (including `NVIDIA_API_KEY` and the Resend keys) are set in the Railway dashboard, not committed. By default the SQLite file sits on the container's ephemeral disk and resets on each deploy (the trend still rebuilds honestly from real signal timestamps). To persist run-over-run history, attach a Railway **Volume** and point `DEALFLOW_DB_PATH` at it — e.g. mount `/data` and set `DEALFLOW_DB_PATH=/data/dealflow.db`.
 
 ## A note on data integrity
 
