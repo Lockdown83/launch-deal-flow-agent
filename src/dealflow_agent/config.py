@@ -52,6 +52,6 @@ def get_settings() -> Settings:
         resend_api_key=os.getenv("RESEND_API_KEY"),
         resend_from=os.getenv("RESEND_FROM", "onboarding@resend.dev"),
         nim_api_key=os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY"),
-        nim_model=os.getenv("NIM_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1"),
+        nim_model=os.getenv("NIM_MODEL", "meta/llama-3.3-70b-instruct"),
         nim_rationale_limit=int(os.getenv("NIM_RATIONALE_LIMIT", "15")),
     )

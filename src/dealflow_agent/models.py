@@ -33,6 +33,13 @@ class Opportunity:
     trigger: str
     why_it_matters: str
     historical_flag: str
+    # --- LLM analyst "brain" output (NVIDIA NIM). All empty on the no-key / fallback path,
+    # so every reader (report, dashboard, outbound) must degrade gracefully when blank. ---
+    one_liner: str = ""          # what they do, in ~12 words
+    verdict: str = ""            # lean-in call: CHASE | WATCH | TRACK (never PASS)
+    why_now: str = ""            # the timing thesis, grounded in the actual signal
+    key_risk: str = ""           # the single biggest risk / unknown
+    conviction_reason: str = ""  # one sentence on why this score is real
 
 
 @dataclass

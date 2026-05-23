@@ -4,7 +4,7 @@ import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .analyst import enrich_rationale
+from .analyst import editor_note, enrich_rationale
 from .config import REPO_ROOT, get_settings
 from .dashboard import render_dashboard
 from .emailer import send_email
@@ -47,8 +47,10 @@ def main() -> None:
     signals = collect_all_signals()
     opportunities = score_signals(signals, min_score=settings.min_score)
 
-    # Replace templated rationale with LLM reasoning (NVIDIA NIM) for the top deals.
+    # The brain: structured per-deal judgement (verdict + memo) and the slate-level editor note.
+    # Both are graceful no-ops without a NIM key.
     enrich_rationale(settings, opportunities)
+    note = editor_note(settings, opportunities)
 
     # Drafted, queued outreach (never auto-sent) — closes the Intake -> Qualify -> Act loop.
     drafts = build_drafts(opportunities)
@@ -59,10 +61,12 @@ def main() -> None:
     metrics = build_metrics(signals, opportunities, sources_monitored, len(drafts))
     run_stats = save_run(signals, opportunities, sources_monitored)
 
-    body = format_report(opportunities)
+    body = format_report(opportunities, editor_note=note)
     report_path = write_report(body)
     # Metrics count the full qualified funnel; the dashboard shows the curated top deals.
-    dashboard_path = write_dashboard(render_dashboard(opportunities[:15], metrics, drafts))
+    dashboard_path = write_dashboard(
+        render_dashboard(opportunities[:15], metrics, drafts, editor_note=note)
+    )
 
     print(body)
     print(

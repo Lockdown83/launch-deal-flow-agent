@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, redirect, request, url_for
 
-from .analyst import enrich_rationale
+from .analyst import editor_note, enrich_rationale
 from .config import get_settings
 from .dashboard import render_dashboard
 from .emailer import send_email
@@ -36,6 +36,7 @@ _cache: dict = {
     "metrics": None,
     "drafts": [],
     "brief": "",
+    "editor_note": "",
     "ready": False,
     "updated": None,
 }
@@ -50,7 +51,10 @@ def _run_pipeline() -> None:
     settings = get_settings()
     signals = collect_all_signals()
     opps = score_signals(signals, min_score=settings.min_score)
-    enrich_rationale(settings, opps)  # LLM (NVIDIA NIM) per-deal reasoning; no-op without a key
+    # The brain (NVIDIA NIM): per-deal verdict + memo, then the slate-level editor note.
+    # Both are graceful no-ops without a key.
+    enrich_rationale(settings, opps)
+    note = editor_note(settings, opps)
     drafts = build_drafts(opps)
     sources_monitored = len({s.source for s in signals})
     metrics = build_metrics(signals, opps, sources_monitored, len(drafts))
@@ -58,13 +62,14 @@ def _run_pipeline() -> None:
         save_run(signals, opps, sources_monitored)
     except Exception as exc:  # persistence is best-effort; never break the live view
         app.logger.warning("save_run failed: %s", exc)
-    brief = format_report(opps)
+    brief = format_report(opps, editor_note=note)
     with _lock:
         _cache.update(
             opps=opps,
             metrics=metrics,
             drafts=drafts,
             brief=brief,
+            editor_note=note,
             ready=True,
             updated=datetime.now(timezone.utc),
         )
@@ -133,6 +138,7 @@ def index() -> str:
         opps = list(_cache["opps"])
         metrics = _cache["metrics"]
         drafts = list(_cache["drafts"])
+        note = _cache["editor_note"]
     if not ready or metrics is None:
         return _WARMING_PAGE
     sent = request.args.get("sent")
@@ -144,7 +150,8 @@ def index() -> str:
     elif sent == "rate":
         notice, ok = "Whoa — too many requests right now. Try again in a bit.", False
     return render_dashboard(
-        opps[:15], metrics, drafts, include_email_form=True, notice=notice, notice_ok=ok
+        opps[:15], metrics, drafts, include_email_form=True, notice=notice, notice_ok=ok,
+        editor_note=note,
     )
 
 

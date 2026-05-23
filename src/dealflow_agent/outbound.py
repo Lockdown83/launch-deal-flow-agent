@@ -29,7 +29,24 @@ _ASKS = (
 
 
 def _focus_line(opp: Opportunity) -> str:
-    """One sentence on what specifically caught our attention."""
+    """One sentence on what specifically caught our attention.
+
+    Prefers the analyst's grounded read (why_now / one_liner) when the LLM has run; otherwise
+    falls back to the templated category + trigger line.
+    """
+    why_now = (opp.why_now or "").strip()
+    if why_now:
+        if why_now[-1] not in ".!?":
+            why_now += "."
+        return f"What stood out: {why_now[0].lower() + why_now[1:]}"
+
+    one_liner = (opp.one_liner or "").strip().rstrip(".")
+    if one_liner:
+        return (
+            f"What stood out: you're building {one_liner[0].lower() + one_liner[1:]}, "
+            "and it's exactly the kind of early signal we move on."
+        )
+
     category = (opp.category or "").strip()
     trigger = (opp.trigger or "").strip()
     why = (opp.why_it_matters or "").strip()

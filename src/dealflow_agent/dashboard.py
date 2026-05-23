@@ -110,6 +110,15 @@ def _source_chips(sources: list[str]) -> str:
     return "\n".join(chips)
 
 
+def _verdict_pill(verdict: str) -> str:
+    """Lean-in call pill (CHASE/WATCH/TRACK). Empty string when no verdict (fallback path)."""
+    v = (verdict or "").strip().upper()
+    cls = {"CHASE": "chase", "WATCH": "watch", "TRACK": "track"}.get(v)
+    if not cls:
+        return ""
+    return f'<span class="verdict verdict--{cls}">{html.escape(v)}</span>'
+
+
 def _deal_card(idx: int, opp: Opportunity) -> str:
     tier = _score_tier(opp.score)
     flag = ""
@@ -167,18 +176,35 @@ def _draft_card(draft: OutboundDraft) -> str:
 def _spotlight_card(opp: Opportunity) -> str:
     """The #1 deal, blown up — the proof headline above the leaderboard."""
     tier = _score_tier(opp.score)
+
+    # Lead with the LLM one-liner when present.
+    oneliner_html = ""
+    if opp.one_liner.strip():
+        oneliner_html = f'<p class="spotlight-oneliner">{html.escape(opp.one_liner)}</p>'
+
+    # Why-now + risk when present; otherwise fall back to the always-present why_it_matters
+    # so the no-key path never renders a blank card.
+    why_html = ""
+    if opp.why_now.strip():
+        why_html += f'<p class="spotlight-why"><span class="kicker">Why now</span>{html.escape(opp.why_now)}</p>'
+    if opp.key_risk.strip():
+        why_html += f'<p class="spotlight-why"><span class="kicker">Risk</span>{html.escape(opp.key_risk)}</p>'
+    if not opp.why_now.strip() and not opp.one_liner.strip():
+        why_html = f'<p class="spotlight-why">{html.escape(opp.why_it_matters)}</p>'
+
     return f"""
     <section class="spotlight spotlight--{tier}">
       <div class="spotlight-badge">&#9733; #1 SPOTLIGHT</div>
       <div class="spotlight-head">
         <h3 class="spotlight-name">{html.escape(opp.company)}</h3>
-        <span class="score score--{tier}">{opp.score:.1f}</span>
+        <span class="spotlight-head-right">{_verdict_pill(opp.verdict)}<span class="score score--{tier}">{opp.score:.1f}</span></span>
       </div>
       <div class="spotlight-tags">
         <span class="tag tag--category">{html.escape(opp.category)}</span>
         <span class="tag">{html.escape(opp.stage)}</span>
       </div>
-      <p class="spotlight-why">{html.escape(opp.why_it_matters)}</p>
+      {oneliner_html}
+      {why_html}
       <div class="spotlight-meta"><span class="kicker">Trigger</span>{html.escape(opp.trigger)}</div>
       <div class="spotlight-sources"><span class="kicker">Sources</span>
         <div class="source-chips">{_source_chips(opp.sources)}</div>
@@ -191,7 +217,8 @@ def _leaderboard(opportunities: list[Opportunity], limit: int = 8) -> str:
     rows = [
         '<div class="lb-row lb-head">'
         '<span class="lb-rank">#</span><span class="lb-co">Company</span>'
-        '<span class="lb-score">Score</span><span class="lb-cat">Category</span>'
+        '<span class="lb-score">Score</span><span class="lb-verdict">Call</span>'
+        '<span class="lb-cat">Category</span>'
         '<span class="lb-src">Src</span></div>'
     ]
     for i, opp in enumerate(opportunities[:limit], start=1):
@@ -201,6 +228,7 @@ def _leaderboard(opportunities: list[Opportunity], limit: int = 8) -> str:
             f'<span class="lb-rank">{i:02d}</span>'
             f'<span class="lb-co">{html.escape(opp.company)}</span>'
             f'<span class="lb-score lb-score--{tier}">{opp.score:.1f}</span>'
+            f'<span class="lb-verdict">{_verdict_pill(opp.verdict)}</span>'
             f'<span class="lb-cat">{html.escape(opp.category)}</span>'
             f'<span class="lb-src">{len(opp.sources)}</span>'
             f"</div>"
@@ -665,12 +693,35 @@ h1.wordmark {
 .spotlight--base { border-color: var(--line); background: var(--panel); box-shadow: none; }
 .spotlight-badge { font-family: var(--pixel); font-size: 10px; letter-spacing: .06em; color: var(--amber); text-transform: uppercase; }
 .spotlight-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 16px 0 4px; }
+.spotlight-head-right { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .spotlight-name { font-family: var(--pixel); font-size: 22px; margin: 0; color: #fff; line-height: 1.35; }
 .spotlight-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.spotlight-oneliner { margin: 0 0 14px; color: #fff; font-size: 16px; line-height: 1.55; font-weight: 600;
+  text-shadow: 0 0 14px rgba(57,255,20,.18); }
 .spotlight-why { margin: 0 0 14px; color: #d4d8e2; font-size: 14px; line-height: 1.62; }
 .spotlight-meta { font-size: 13px; color: #b9bdc9; margin-bottom: 14px; }
+
+/* Verdict / lean-in call pills — CHASE (go-green), WATCH (amber), TRACK (cyan) */
+.verdict { display: inline-block; font-family: var(--pixel); font-size: 10px; letter-spacing: .04em;
+  text-transform: uppercase; padding: 6px 10px; border-radius: 10px; vertical-align: middle;
+  font-variant-numeric: tabular-nums; }
+.verdict--chase { color: var(--green); background: rgba(57,255,20,.12); border: 1px solid var(--green);
+  box-shadow: 0 0 10px rgba(57,255,20,.45); text-shadow: 0 0 6px rgba(57,255,20,.5); }
+.verdict--watch { color: var(--amber); background: rgba(255,227,77,.12); border: 1px solid var(--amber);
+  box-shadow: 0 0 10px rgba(255,227,77,.4); text-shadow: 0 0 6px rgba(255,227,77,.45); }
+.verdict--track { color: var(--cyan); background: rgba(61,214,255,.12); border: 1px solid var(--cyan);
+  box-shadow: 0 0 10px rgba(61,214,255,.4); text-shadow: 0 0 6px rgba(61,214,255,.45); }
+
+/* Editor's note — "what matters this week" hero strip */
+.editor-note { margin: 18px 0 8px; border-radius: 16px; padding: 22px 26px;
+  background: linear-gradient(180deg, rgba(255,227,77,.07) 0%, rgba(255,227,77,0) 45%), var(--panel);
+  border: 1px solid rgba(255,227,77,.5);
+  box-shadow: 0 0 30px rgba(255,227,77,.12), inset 0 1px 0 rgba(255,227,77,.2); }
+.editor-note-title { font-family: var(--pixel); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--amber); text-shadow: 0 0 8px rgba(255,227,77,.45); }
+.editor-note-body { margin: 14px 0 0; color: #e4e7ef; font-family: var(--mono); font-size: 14.5px; line-height: 1.7; }
 .leaderboard { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--panel); }
-.lb-row { display: grid; grid-template-columns: 44px 1fr auto 1.1fr 46px; gap: 14px; align-items: center;
+.lb-row { display: grid; grid-template-columns: 44px 1fr auto 64px 1.1fr 46px; gap: 14px; align-items: center;
   padding: 13px 18px; border-top: 1px solid rgba(255,255,255,.05); }
 .lb-row:first-child { border-top: none; }
 .lb-head { background: #050507; }
@@ -682,6 +733,9 @@ h1.wordmark {
 .lb-score--high { color: var(--pink); }
 .lb-score--mid { color: var(--cyan); }
 .lb-score--base { color: var(--muted); }
+.lb-verdict { display: flex; justify-content: flex-start; min-width: 0; }
+.lb-verdict .verdict { padding: 4px 7px; font-size: 8px; }
+.lb-head .lb-verdict { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .lb-cat { font-family: var(--mono); font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-src { font-family: var(--mono); font-size: 13px; color: var(--cyan); text-align: right; }
 
@@ -740,10 +794,18 @@ footer { color: var(--muted); font-size: 12px; margin-top: 48px; text-align: cen
   .hero-number { font-size: 46px; }
   h1.wordmark { font-size: 26px; }
   .hud { font-size: 9px; }
-  .lb-row { grid-template-columns: 34px 1fr auto 42px; }
+  .lb-row { grid-template-columns: 34px 1fr auto 56px 42px; }
   .lb-cat { display: none; }
 }
 """
+
+
+def _editor_note_section(note: str) -> str:
+    return f'''
+    <section class="editor-note">
+      <div class="editor-note-title">&#9658; WHAT MATTERS THIS WEEK</div>
+      <p class="editor-note-body">{html.escape(note)}</p>
+    </section>'''
 
 
 def render_dashboard(
@@ -754,6 +816,7 @@ def render_dashboard(
     include_email_form: bool = False,
     notice: str = "",
     notice_ok: bool = True,
+    editor_note: str = "",
 ) -> str:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -812,6 +875,9 @@ def render_dashboard(
       </div>
       {delta_chip}
     </section>"""
+
+    # Editor's note — "what matters this week" hero strip (only when provided)
+    editor_block = _editor_note_section(editor_note) if editor_note.strip() else ""
 
     # Trend
     trend_block = f"""
@@ -891,6 +957,7 @@ def render_dashboard(
     <p class="generated">GENERATED {now}</p>
 
     {hero}
+    {editor_block}
     {cta_block}
 
     <p class="section-label">&#9658; THE FUNNEL: REACH &rarr; RESEARCH &rarr; QUALITY &rarr; ACTION</p>
