@@ -32,6 +32,11 @@ class Settings:
     # Resend HTTP email API (works on cloud hosts that block SMTP). Preferred when set.
     resend_api_key: str | None
     resend_from: str
+    # NVIDIA NIM (OpenAI-compatible) for LLM-written per-deal rationale. Optional — falls
+    # back to templated rationale when no key is set.
+    nim_api_key: str | None
+    nim_model: str
+    nim_rationale_limit: int
 
 
 def get_settings() -> Settings:
@@ -46,4 +51,7 @@ def get_settings() -> Settings:
         min_score=float(os.getenv("MIN_SCORE", "2.0")),
         resend_api_key=os.getenv("RESEND_API_KEY"),
         resend_from=os.getenv("RESEND_FROM", "onboarding@resend.dev"),
+        nim_api_key=os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY"),
+        nim_model=os.getenv("NIM_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1"),
+        nim_rationale_limit=int(os.getenv("NIM_RATIONALE_LIMIT", "15")),
     )

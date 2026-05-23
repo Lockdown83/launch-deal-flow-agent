@@ -237,6 +237,37 @@ def _emerging_github(signals: list[Signal]) -> list[Signal]:
     return kept[:GITHUB_CAP]
 
 
+_LEGAL_SUFFIX_RE = re.compile(
+    r"[,\s]+(?:inc|incorporated|llc|l\.l\.c|corp|corporation|ltd|limited|lp|l\.p|llp|plc|gmbh)\.?$",
+    re.IGNORECASE,
+)
+_JUNK_NAME_RE = re.compile(
+    r"(?i)\b(realty|properties|property|investors|real estate|reit|apartments|residences|"
+    r"estates|street|avenue|\bave\b|\broad\b|\bblvd\b|\bdrive\b|\bcourt\b|\blane\b)\b"
+)
+
+
+def clean_company_name(name: str) -> str:
+    """Strip legal-entity suffixes and de-shout ALL-CAPS names so the brief reads clean."""
+    n = (name or "").strip().strip(",").strip()
+    prev = None
+    while n and n != prev:  # strip stacked suffixes, e.g. "Foo Holdings, LLC"
+        prev = n
+        n = _LEGAL_SUFFIX_RE.sub("", n).strip().rstrip(",.").strip()
+    if n and len(n) > 3 and n == n.upper():  # de-shout EDGAR all-caps -> Title Case
+        n = n.title()
+        n = re.sub(r"\b(Ai|Ml|Api|Hr|Ar|Vr|Iot|Saas)\b", lambda m: m.group(1).upper(), n)
+    return n or (name or "").strip()
+
+
+def _looks_like_junk(name: str) -> bool:
+    """Real-estate / SPV / address-style entities that slip through (esp. SEC Form D)."""
+    n = (name or "").strip()
+    if not n or re.match(r"^\d", n):  # empty, or starts with a number (street addresses / SPVs)
+        return True
+    return bool(_JUNK_NAME_RE.search(n))
+
+
 def collect_all_signals() -> list[Signal]:
     """Aggregate every source. Required by brief: Sequoia + a16z + YC.
     Added for breadth/depth: live YC directory, GitHub traction, SEC Form D, HN validation.
@@ -272,6 +303,16 @@ def collect_all_signals() -> list[Signal]:
         signals.extend(source_edgar.collect())
     except Exception as exc:
         print(f"WARN: source_edgar failed: {exc}")
+
+    # Clean names + drop real-estate/SPV junk (esp. from EDGAR) BEFORE enrichment, so the
+    # brief reads clean and HN lookups search clean names.
+    cleaned: list[Signal] = []
+    for s in signals:
+        if _looks_like_junk(s.company):
+            continue
+        s.company = clean_company_name(s.company)
+        cleaned.append(s)
+    signals = cleaned
 
     # HN validation: enrich only the named "deal" companies (skip the GitHub repo bulk,
     # which already carries its own traction metric), and cap the number of API calls.

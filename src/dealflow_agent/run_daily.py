@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .analyst import enrich_rationale
 from .config import REPO_ROOT, get_settings
 from .dashboard import render_dashboard
 from .emailer import send_email
@@ -45,6 +46,9 @@ def main() -> None:
     settings = get_settings()
     signals = collect_all_signals()
     opportunities = score_signals(signals, min_score=settings.min_score)
+
+    # Replace templated rationale with LLM reasoning (NVIDIA NIM) for the top deals.
+    enrich_rationale(settings, opportunities)
 
     # Drafted, queued outreach (never auto-sent) — closes the Intake -> Qualify -> Act loop.
     drafts = build_drafts(opportunities)

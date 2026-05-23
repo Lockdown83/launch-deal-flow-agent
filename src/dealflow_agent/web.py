@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, redirect, request, url_for
 
+from .analyst import enrich_rationale
 from .config import get_settings
 from .dashboard import render_dashboard
 from .emailer import send_email
@@ -49,6 +50,7 @@ def _run_pipeline() -> None:
     settings = get_settings()
     signals = collect_all_signals()
     opps = score_signals(signals, min_score=settings.min_score)
+    enrich_rationale(settings, opps)  # LLM (NVIDIA NIM) per-deal reasoning; no-op without a key
     drafts = build_drafts(opps)
     sources_monitored = len({s.source for s in signals})
     metrics = build_metrics(signals, opps, sources_monitored, len(drafts))
