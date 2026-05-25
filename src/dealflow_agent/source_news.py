@@ -46,6 +46,12 @@ _VERB = (
 )
 _HEADLINE_RE = re.compile(rf"^(?P<co>[A-Z][\w.&'-]*(?:\s+[A-Z0-9][\w.&'-]*){{0,3}})\s+{_VERB}\b")
 _AMOUNT_RE = re.compile(r"\$\s?(\d+(?:\.\d+)?)\s?(b|bn|billion|m|mm|million|k|thousand)\b", re.I)
+# A funding cue must be present, else "raises" catches non-funding noise ("Xi raises his voice").
+_MONEY_RE = re.compile(
+    r"[$€£]|\b\d+(?:\.\d+)?\s?(?:m|mm|million|b|bn|billion|k)\b|"
+    r"\bseries\s+[a-e]\b|\bseed\b|\bfunding\b|\braised\b|\bround\b|\bvaluation\b",
+    re.I,
+)
 
 # Captured "company" strings that are really generic words, publishers, or megacaps (not deal flow).
 _BAD = {
@@ -94,6 +100,8 @@ def _extract_company(title: str) -> str | None:
     """Pull the company out of a funding/launch headline. Best-effort, precision-biased."""
     m = _HEADLINE_RE.match(title)
     if not m:
+        return None
+    if not _MONEY_RE.search(title):  # require a real funding cue, not just the verb
         return None
     co = m.group("co").strip().rstrip(",.").strip()
     # "Sam Altman-backed Coco Robotics" -> "Coco Robotics"
