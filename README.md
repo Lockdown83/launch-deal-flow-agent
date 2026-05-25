@@ -86,6 +86,17 @@ Each source module exposes a `collect() -> list[Signal]` and is self-guarded —
 
 Before scoring, a cleanup pass strips legal suffixes (`…, Inc.`), de-shouts ALL-CAPS EDGAR names, and drops address/SPV-style junk so the brief reads like real companies. YC directory listings are demoted in weight so the ~200 live batch companies only surface as qualified deals when another source corroborates them.
 
+## What I deliberately left out — and why
+
+The brief asked what partners are "talking about on LinkedIn and X." I researched both and chose **not** to wire them — a deliberate call, not a gap:
+
+- **LinkedIn.** The obvious tool (Proxycurl) was sued by LinkedIn and shut down in 2025. The official API can't read third-party profiles, and DIY scraping is a terms-of-service and legal minefield with a ~50-profiles/day ceiling. Not a foundation to build a credible agent on.
+- **X / Twitter.** The API moved to metered pay-per-use in 2026, and the viable third-party route (TwitterAPI.io) is paid per 1,000 tweets. Workable — but paid, and this is a free capability demo.
+
+So instead of brittle, paid, or ToS-risky social scraping, I covered the **firm-level** signals those partners ultimately act on — announcements, SEC filings, portfolio activity, and funding news — from free, durable sources. The convergence engine is where the edge is anyway.
+
+It's a clean add later, too: partner-social would drop in as one more `source_x.py` (same `collect() -> list[Signal]` contract) pointed at ~15–25 vetted partner handles via a paid API, once there's budget. The architecture already supports it — a data-source toggle, not a redesign.
+
 ## Delivery
 
 - **Live dashboard** — a self-contained, retro-arcade web UI (neon 8-bit theme). The HTML embeds its own base64 pixel font, inline-SVG charts, a CSS marquee ticker, and an inline-SVG favicon — **no external assets, no CDNs** (it renders offline). It surfaces the funnel, the score-distribution histogram, a real signal trend, the ranked deal board with verdicts, and the queued outbound drafts.
