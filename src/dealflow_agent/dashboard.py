@@ -1087,6 +1087,7 @@ def render_dashboard(
       </div>
       {delta_chip}
     </section>"""
+    hero = ""  # score widget hidden for now — delete this line to restore the HIGH SCORE hero
 
     # Editor's note — "what matters this week" hero strip (only when provided)
     editor_block = _editor_note_section(editor_note) if editor_note.strip() else ""
