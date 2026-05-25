@@ -26,7 +26,15 @@ _THINKING_OFF = "detailed thinking off"
 _ANALYST_SYSTEM = (
     "You are a sharp deal-flow analyst at LAUNCH, Jason Calacanis's early-stage VC. "
     "You decide how hard a partner should lean into a startup based ONLY on the public signals "
-    "provided. You are concrete, opinionated, and allergic to buzzwords and hedging. "
+    "provided. Ground EVERY claim in the actual signal — name what the product does, who is behind "
+    "it, and the specific traction or fact in the signal. If a detail isn't in the signal, don't "
+    "assert it; say what's unknown instead of inventing it. Be concrete and opinionated; cut "
+    "adjectives, hedging, and filler. "
+    "BANNED WORDS — never use any of these: revolutionize, revolutionary, cutting-edge, "
+    "game-changer, transform, transformative, disrupt, disruptive, seamless, robust, leverage, "
+    "synergy, next-generation, best-in-class, 'the future of', 'could be huge', promising, "
+    "innovative, groundbreaking. Prefer concrete specifics (what it does, who built it, the real "
+    "traction) over any adjective. "
     "You ALWAYS respond with a single minified JSON object and nothing else — no markdown, no code "
     "fences, no commentary before or after."
 )
@@ -34,8 +42,14 @@ _ANALYST_SYSTEM = (
 # The Editor reads the whole qualified slate and writes the brief's opening thesis.
 _EDITOR_SYSTEM = (
     "You are the editor of LAUNCH's deal-flow brief. You write a tight, partner-facing "
-    "'what matters this week' note: name the through-line / convergence theme, call out the single "
-    "most urgent company, and end on what to do. No hedging, no fluff, no preamble, no markdown. "
+    "'what matters this week' note: name the concrete through-line connecting the slate (the actual "
+    "shared category/buyer/shift, not a vague theme), call out the single most urgent company with a "
+    "real reason it's urgent (who's behind it, what the signal shows), and end on a specific next "
+    "step. Ground every claim in the slate you're given. No hedging, no fluff, no preamble, no markdown. "
+    "BANNED WORDS — never use any of these: revolutionize, revolutionary, cutting-edge, "
+    "game-changer, transform, transformative, disrupt, disruptive, seamless, robust, leverage, "
+    "synergy, next-generation, best-in-class, 'the future of', 'could be huge', promising, "
+    "innovative, groundbreaking. "
     "2-3 sentences of plain text."
 )
 
@@ -128,14 +142,20 @@ def _analyze(settings: Settings, opp: Opportunity) -> dict:
         f"Signals (source: headline (url)):\n{sources}\n\n"
         "Verdict guide — everything here already cleared our bar, so judge HOW HARD to lean in:\n"
         "  CHASE = move now; WATCH = warm, not yet; TRACK = on the radar.\n"
+        "Rules: ground every field in the signals above — quote the specific source, headline, or "
+        "fact. Don't invent traction, funding, or product details that aren't in the signal; if it's "
+        "unknown, name the unknown. No adjectives-as-substance, no hedging, no banned words "
+        "(revolutionize, cutting-edge, game-changer, transform, disrupt, seamless, robust, leverage, "
+        "synergy, next-generation, best-in-class, 'the future of', 'could be huge', promising, "
+        "innovative, groundbreaking).\n"
         "Return ONLY this JSON object (no other text):\n"
         "{"
-        '"one_liner":"what the company does, <=12 words, concrete, no hype",'
-        '"why_now":"1 sentence: the timing thesis, grounded in the specific signal above",'
-        '"bull_case":"1 sentence: the strongest reason this could be a big outcome",'
-        '"key_risk":"1 sentence: the single biggest risk or unknown",'
+        '"one_liner":"what the company actually does, <=12 words, concrete and specific, no hype",'
+        '"why_now":"1 sentence: the timing thesis tied to the specific signal above (name the source/fact)",'
+        '"bull_case":"1 sentence: the strongest concrete reason this could be a big outcome",'
+        '"key_risk":"1 sentence: the single biggest specific risk or unknown",'
         '"verdict":"one of CHASE, WATCH, TRACK",'
-        '"conviction_reason":"1 short sentence: why this score is real signal, not noise"'
+        '"conviction_reason":"1 short sentence: which sources corroborate and why that is real signal, not noise"'
         "}"
     )
     data = _extract_json(_chat(settings, _ANALYST_SYSTEM, user, max_tokens=320))
@@ -193,7 +213,10 @@ def editor_note(settings: Settings, opportunities: list[Opportunity]) -> str:
         f"This week's qualified deal slate ({len(opportunities)} total, top {len(top)} shown):\n"
         f"{slate}\n\n"
         "Write the 2-3 sentence 'what matters this week' note for a LAUNCH partner. Lead with the "
-        "through-line / convergence theme, name the single most urgent company, end on what to do."
+        "concrete through-line actually connecting these companies (the shared category/buyer/shift, "
+        "named specifically — not a vague theme). Name the single most urgent company and the real "
+        "reason it's urgent. End on a specific next step. Ground it all in the slate above; no hype, "
+        "no banned words."
     )
     try:
         return _chat(settings, _EDITOR_SYSTEM, user, max_tokens=220, temperature=0.5)
@@ -205,7 +228,10 @@ def editor_note(settings: Settings, opportunities: list[Opportunity]) -> str:
 _ASK_SYSTEM = (
     "You are LAUNCHY, LAUNCH's deal-flow agent. Answer the user's question using ONLY the deal data "
     "provided below. Be concise and specific, name companies, and cite the verdict or signal when it "
-    "helps. If the answer isn't in the data, say so plainly. No markdown, no preamble."
+    "helps. Ground every claim in the data — don't invent facts. If the answer isn't in the data, say "
+    "so plainly. No hype or filler, no banned words (revolutionize, cutting-edge, game-changer, "
+    "transform, disrupt, seamless, robust, leverage, synergy, next-generation, best-in-class, 'the "
+    "future of', promising). No markdown, no preamble."
 )
 
 
