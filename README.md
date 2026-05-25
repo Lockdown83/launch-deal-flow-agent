@@ -59,6 +59,16 @@ Default model: `meta/llama-3.3-70b-instruct`. (The model id is configurable via 
 
 **Honesty note: the LLM layer is entirely optional.** With no API key, `enrich_rationale()` and `editor_note()` are graceful no-ops — the pipeline falls back to deterministic templated rationale and runs end to end. Per-deal LLM failures are swallowed so a bad call never breaks a run. Nothing here hard-depends on the model.
 
+## Design decisions (the thinking)
+
+A few judgment calls shaped this build — they're the difference between a scraper and an agent a partner would actually trust:
+
+- **Convergence over volume.** One source is noise; the *same* company surfacing across independent sources in the same window is signal. The agent rewards cross-source agreement, not raw count — which is why a quiet Form D + a GitHub spike + a funding headline can outrank a single loud announcement. That's the core bet.
+- **The math finds the deal; the AI explains it.** Ranking is deterministic and reproducible, so *"why is this #1?"* always has a concrete answer a model can't distort. The LLM only writes the words and the lean-in verdict — it never reorders the board.
+- **Precision over recall.** I filter aggressively — dropping VC funds, SPVs, ETFs, address-style SEC junk, generic-name false matches, and non-funding "raises." I'd rather surface 14 clean deals than 200 noisy ones; a partner's trust dies on the first junk row.
+- **Free and dependency-light, on purpose.** Pure-stdlib core, no paid APIs — it proves the thesis works on public data alone, and it's honest about being a capability demo rather than a funded product.
+- **Real data, always.** No mock numbers. The trend is rebuilt from real signal timestamps; empty states say so plainly. If a metric is on screen, it traces to something that actually happened.
+
 ## Data sources
 
 Each source module exposes a `collect() -> list[Signal]` and is self-guarded — a network failure returns `[]` and never crashes the run.
