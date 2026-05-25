@@ -154,22 +154,67 @@ def collect_a16z_news() -> list[Signal]:
     return signals
 
 
-def _company_matches_hn_hit(company: str, title: str, url: str) -> bool:
-    """Avoid false positives for generic names like Canary, Hilbert, or Glimpse."""
-    normalized = re.sub(r"[^a-z0-9]", "", company.lower())
+# Over-generic single-word names that constantly collide with unrelated HN stories.
+# A title keyword match on any of these is meaningless; only a domain match counts.
+_HN_GENERIC_TOKENS = {
+    "hyper", "modern", "glimpse", "canary", "standard", "ai", "app", "data",
+    "cloud", "labs", "hilbert", "general", "core", "base", "stack", "flow",
+    "node", "edge", "vector", "atlas", "nova", "echo", "pulse", "scale",
+}
+# A short single-word name needs real traction before a bare keyword match is trusted.
+_HN_SINGLE_WORD_MIN_POINTS = 25
+_HN_SHORT_NAME_LEN = 6
+
+
+def _title_has_standalone_token(company: str, title: str) -> bool:
+    """True only if the company name appears as a clear, whole-word token in the title.
+
+    Uses word boundaries so 'Hyper' does not match 'hyperscale' or 'WAR.GOV/UFO'
+    noise, and so a substring buried inside another word never counts.
+    """
+    return bool(re.search(rf"\b{re.escape(company.lower())}\b", title.lower()))
+
+
+def _company_matches_hn_hit(company: str, title: str, url: str, points: int = 0) -> bool:
+    """Decide whether an HN story is really about `company`.
+
+    Conservative by design: better to miss a weak HN match than to attach a wrong one
+    (the "Hyper" -> "Show HN: ... WAR.GOV/UFO files" failure mode). A match requires a
+    clear standalone-token hit in the title OR a strong domain match, with extra
+    guards for short/generic single-word names.
+    """
+    name = (company or "").strip()
+    if not name:
+        return False
+    normalized = re.sub(r"[^a-z0-9]", "", name.lower())
     domain = re.sub(r"[^a-z0-9]", "", urlparse(url).netloc.lower()) if url else ""
-    title_lower = title.lower()
 
-    if normalized and normalized in domain:
+    # A strong domain match is the most trustworthy signal — accept it regardless of name.
+    if normalized and len(normalized) >= 3 and normalized in domain:
         return True
 
-    # Multi-word names are usually specific enough when the exact phrase appears in the title.
-    if " " in company and company.lower() in title_lower:
+    is_single_word = " " not in name
+    if is_single_word:
+        # Generic/over-common single words never qualify on a title keyword alone.
+        if name.lower() in _HN_GENERIC_TOKENS:
+            return False
+        # Must appear as a standalone token, not a substring of another word.
+        if not _title_has_standalone_token(name, title):
+            return False
+        # Title-only matches for single (often dictionary) words are unreliable — e.g. company
+        # "Panacea" colliding with "...a panacea for snake bites". Trust a title hit only for a
+        # product-launch post (Show HN / Launch HN), which actually names the company's product.
+        tl = title.lower()
+        if not (tl.startswith("show hn") or tl.startswith("launch hn")
+                or "show hn:" in tl or "launch hn:" in tl):
+            return False
+        # Very short single-word names are too ambiguous; require real traction even for launches.
+        if len(normalized) <= _HN_SHORT_NAME_LEN and points < _HN_SINGLE_WORD_MIN_POINTS:
+            return False
         return True
 
-    # Single-word company names are too ambiguous for HN keyword matching.
-    # Only count them when the company appears in the linked domain.
-    return False
+    # Multi-word names are specific enough when the exact phrase appears in the title.
+    return company.lower() in title.lower()
 
 
 def collect_hn_for(companies: list[str]) -> list[Signal]:
@@ -191,13 +236,13 @@ def collect_hn_for(companies: list[str]) -> list[Signal]:
             observed_at = parse_rss_date(created)
             if observed_at < cutoff:
                 continue
-            if not _company_matches_hn_hit(company, title, url):
+            points = hit.get("points") or 0
+            if not _company_matches_hn_hit(company, title, url, int(points)):
                 continue
             # Link to the HN discussion permalink, never the external article URL:
             # aggregator/roundup posts can point at an unrelated company and break trust.
             object_id = hit.get("objectID")
             hn_url = f"https://news.ycombinator.com/item?id={object_id}" if object_id else "https://news.ycombinator.com/"
-            points = hit.get("points") or 0
             results.append(
                 Signal(
                     company=company,

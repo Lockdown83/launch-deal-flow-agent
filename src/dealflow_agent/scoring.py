@@ -86,6 +86,14 @@ def score_signals(signals: list[Signal], min_score: float = 2.0) -> list[Opportu
 
         latest = max(company_signals, key=lambda item: item.observed_at)
         historical_flag = latest.observed_at.strftime("%Y-%m-%d %H:%M UTC")
+        # Trigger = the most AUTHORITATIVE signal, not the most recent. Rank by signal
+        # weight (direct_announcement > partner_signal > founder_community >
+        # portfolio_momentum), breaking ties by recency (newer wins). A weak, recent
+        # HN post should never out-display a strong Sequoia/a16z/YC/EDGAR/GitHub signal.
+        best = max(
+            company_signals,
+            key=lambda item: (WEIGHTS.get(item.signal_type, 1.0), item.observed_at),
+        )
         opportunities.append(
             Opportunity(
                 company=company,
@@ -93,7 +101,7 @@ def score_signals(signals: list[Signal], min_score: float = 2.0) -> list[Opportu
                 stage=latest.stage,
                 category=category,
                 sources=sources,
-                trigger=f"{latest.source}: {latest.title}",
+                trigger=f"{best.source}: {best.title}",
                 why_it_matters=why_it_matters(company, category),
                 historical_flag=historical_flag,
             )
