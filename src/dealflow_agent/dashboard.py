@@ -1173,10 +1173,10 @@ def render_dashboard(
       signals into net-new qualified deal flow &mdash; reach, research, quality, action.</p>
     <p class="generated">GENERATED {now}</p>
 
+    {cta_block}
     {console_block}
     {hero}
     {editor_block}
-    {cta_block}
     {ask_block}
 
     <p class="section-label">&#9658; THE FUNNEL: REACH &rarr; RESEARCH &rarr; QUALITY &rarr; ACTION</p>
