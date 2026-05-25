@@ -212,31 +212,28 @@ def _spotlight_card(opp: Opportunity) -> str:
     </section>"""
 
 
-def _deal_cards(opportunities: list[Opportunity], limit: int = 5) -> str:
-    """Ranked deal cards (ranks #2..N) — replaces the old leaderboard table. #1 is the spotlight."""
-    rest = opportunities[1 : 1 + limit]
-    if not rest:
-        return ""
-    cards = []
-    for offset, opp in enumerate(rest):
-        rank = offset + 2
+def _leaderboard(opportunities: list[Opportunity], limit: int = 8) -> str:
+    """Arcade HIGH-SCORES table — the top deals ranked, one glance."""
+    rows = [
+        '<div class="lb-row lb-head">'
+        '<span class="lb-rank">#</span><span class="lb-co">Company</span>'
+        '<span class="lb-score">Score</span><span class="lb-verdict">Call</span>'
+        '<span class="lb-cat">Category</span>'
+        '<span class="lb-src">Src</span></div>'
+    ]
+    for i, opp in enumerate(opportunities[:limit], start=1):
         tier = _score_tier(opp.score)
-        line = (opp.one_liner.strip() or opp.why_it_matters.strip())
-        cards.append(
-            f"""
-      <article class="dcard dcard--{tier}">
-        <div class="dcard-head">
-          <span class="dcard-rank">#{rank:02d}</span>
-          <h4 class="dcard-name">{html.escape(opp.company)}</h4>
-          {_verdict_pill(opp.verdict)}
-          <span class="score score--{tier}">{opp.score:.1f}</span>
-        </div>
-        <div class="dcard-cat">{html.escape(opp.category)}</div>
-        <p class="dcard-line">{html.escape(line)}</p>
-        <div class="dcard-src">{_source_chips(opp.sources[:1])}</div>
-      </article>"""
+        rows.append(
+            f'<div class="lb-row">'
+            f'<span class="lb-rank">{i:02d}</span>'
+            f'<span class="lb-co">{html.escape(opp.company)}</span>'
+            f'<span class="lb-score lb-score--{tier}">{opp.score:.1f}</span>'
+            f'<span class="lb-verdict">{_verdict_pill(opp.verdict)}</span>'
+            f'<span class="lb-cat">{html.escape(opp.category)}</span>'
+            f'<span class="lb-src">{len(opp.sources)}</span>'
+            f"</div>"
         )
-    return f'<div class="deal-grid">{"".join(cards)}</div>'
+    return f'<div class="leaderboard">{"".join(rows)}</div>'
 
 
 def _funnel_stat(value: str, label: str) -> str:
@@ -742,22 +739,6 @@ h1.wordmark {
 .lb-cat { font-family: var(--mono); font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-src { font-family: var(--mono); font-size: 13px; color: var(--cyan); text-align: right; }
 
-/* Ranked deal cards (replaced the leaderboard table) */
-.deal-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
-.dcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-  padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
-.dcard--high { border-color: var(--pink); box-shadow: 0 0 14px rgba(255,61,154,.16); }
-.dcard--mid { border-color: var(--cyan); box-shadow: 0 0 12px rgba(61,214,255,.14); }
-.dcard-head { display: flex; align-items: center; gap: 10px; }
-.dcard-rank { font-family: var(--pixel); font-size: 11px; color: var(--amber); flex: none; }
-.dcard-name { font-family: var(--mono); font-size: 16px; color: var(--text); font-weight: 700;
-  margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dcard .score { flex: none; }
-.dcard-cat { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-.dcard-line { font-family: var(--mono); font-size: 13px; color: var(--green-soft); line-height: 1.5;
-  margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.dcard-src { margin-top: 2px; }
-
 /* Outbound queue — QUEUED arcade cards */
 .draft { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--amber);
   border-radius: 16px; padding: 18px 22px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(255,227,77,.07); }
@@ -879,7 +860,6 @@ footer { color: var(--muted); font-size: 12px; margin-top: 48px; text-align: cen
   .hud { font-size: 9px; }
   .lb-row { grid-template-columns: 34px 1fr auto 56px 42px; }
   .lb-cat { display: none; }
-  .deal-grid { grid-template-columns: 1fr; }
 }
 """
 
@@ -1142,7 +1122,7 @@ def render_dashboard(
 
     # Deals surfaced — #1 spotlight + arcade high-scores leaderboard
     if opportunities:
-        deals_block = _spotlight_card(opportunities[0]) + _deal_cards(opportunities)
+        deals_block = _spotlight_card(opportunities[0]) + _leaderboard(opportunities)
     else:
         deals_block = (
             '<p class="empty-note">&#9658; NO DEALS SURFACED THIS RUN &mdash; INSERT COIN.<br>'
