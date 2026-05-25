@@ -41,6 +41,7 @@ _cache: dict = {
     "brief_html": "",
     "editor_note": "",
     "run_id": None,
+    "feed": [],
     "ready": False,
     "updated": None,
 }
@@ -68,6 +69,12 @@ def _run_pipeline() -> None:
     signals = collect_all_signals()
     sources_monitored = len({s.source for s in signals})
     _log(f"ingested {len(signals)} signals from {sources_monitored} sources")
+    # Freshest raw signals for the live feed (newest first).
+    feed = [
+        {"company": s.company, "source": s.source, "title": s.title, "url": s.url,
+         "t": s.observed_at.astimezone(timezone.utc).isoformat()}
+        for s in sorted(signals, key=lambda s: s.observed_at, reverse=True)[:20]
+    ]
     opps = score_signals(signals, min_score=settings.min_score)
     _log(f"scored by cross-source convergence → {len(opps)} qualified above threshold")
     # The brain (NVIDIA NIM): per-deal verdict + memo, then the slate-level editor note.
@@ -99,6 +106,7 @@ def _run_pipeline() -> None:
             brief_html=brief_html,
             editor_note=note,
             run_id=run_id,
+            feed=feed,
             ready=True,
             updated=datetime.now(timezone.utc),
         )
@@ -259,6 +267,7 @@ def live():
         metrics = _cache["metrics"]
         run_id = _cache["run_id"]
         drafts_n = len(_cache["drafts"])
+        feed = list(_cache["feed"])
         activity = list(_activity)
     counters = {}
     if metrics is not None:
@@ -277,6 +286,7 @@ def live():
         "refresh_hours": REFRESH_HOURS,
         "next_sweep_sec": _next_sweep_seconds(updated),
         "activity": activity,
+        "feed": feed,
         "counters": counters,
     }
 
