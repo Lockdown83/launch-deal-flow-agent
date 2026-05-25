@@ -824,6 +824,11 @@ footer { color: var(--muted); font-size: 12px; margin-top: 48px; text-align: cen
 .ask-btn:disabled { opacity: .55; cursor: progress; transform: none; }
 .ask-answer { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(61,214,255,.25);
   font: 14px/1.7 var(--mono); color: #cfd3de; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.7em; }
+.ask-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.ask-chip { font-family: var(--mono); font-size: 12px; color: var(--cyan); cursor: pointer;
+  background: rgba(61,214,255,.08); border: 1px solid rgba(61,214,255,.35); border-radius: 999px;
+  padding: 7px 13px; transition: background .12s ease, border-color .12s ease; }
+.ask-chip:hover { background: rgba(61,214,255,.16); border-color: var(--cyan); }
 
 /* LIVE agent-activity console (web mode only) — the Polsia-style "watch it working" strip */
 .console { margin: 22px 0 6px; border-radius: 14px; padding: 16px 18px;
@@ -899,7 +904,12 @@ def _ask_section() -> str:
           aria-label="ask the agent a question" autocomplete="off">
         <button class="ask-btn" id="ask-send" type="button">&#9658; SEND</button>
       </div>
-      <div class="ask-answer" id="ask-answer" aria-live="polite">&#9658; insert a question to begin.</div>
+      <div class="ask-chips">
+        <button class="ask-chip" type="button">What's the most urgent deal this week?</button>
+        <button class="ask-chip" type="button">Which deals are in fintech?</button>
+        <button class="ask-chip" type="button">What changed since the last sweep?</button>
+      </div>
+      <div class="ask-answer" id="ask-answer" aria-live="polite">&#9658; tap a question or ask your own.</div>
     </section>"""
 
 
@@ -928,6 +938,10 @@ _ASK_SCRIPT = """  <script>
     }
     btn.addEventListener('click', ask);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
+    var chips = document.querySelectorAll('.ask-chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].addEventListener('click', function () { input.value = this.textContent; ask(); });
+    }
   })();
   </script>"""
 
