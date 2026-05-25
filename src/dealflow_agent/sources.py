@@ -10,7 +10,7 @@ import urllib.request
 from datetime import timedelta
 from urllib.parse import urlparse
 
-from . import source_edgar, source_github, source_yc
+from . import source_edgar, source_edgar_fulltext, source_github, source_news, source_yc
 from .models import Signal, now_utc, parse_rss_date
 
 SEQUOIA_RSS = "https://www.sequoiacap.com/feed/"
@@ -348,6 +348,14 @@ def collect_all_signals() -> list[Signal]:
         signals.extend(source_edgar.collect())
     except Exception as exc:
         print(f"WARN: source_edgar failed: {exc}")
+    try:
+        signals.extend(source_news.collect())
+    except Exception as exc:
+        print(f"WARN: source_news failed: {exc}")
+    try:
+        signals.extend(source_edgar_fulltext.collect())
+    except Exception as exc:
+        print(f"WARN: source_edgar_fulltext failed: {exc}")
 
     # Clean names + drop real-estate/SPV junk (esp. from EDGAR) BEFORE enrichment, so the
     # brief reads clean and HN lookups search clean names.

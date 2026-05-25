@@ -8,6 +8,8 @@ from .models import Opportunity, Signal
 WEIGHTS = {
     "direct_announcement": 3.0,
     "partner_signal": 2.5,
+    "news_event": 2.7,
+    "regulatory_filing": 2.3,
     "founder_community": 1.8,
     "portfolio_momentum": 1.0,
 }
