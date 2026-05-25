@@ -830,6 +830,21 @@ footer { color: var(--muted); font-size: 12px; margin-top: 48px; text-align: cen
 .logline.dim { color: var(--muted); }
 @keyframes logfade { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 
+/* LIVE SIGNAL FEED (web mode only) — raw intel as it lands */
+.feed { display: flex; flex-direction: column; gap: 2px; border: 1px solid rgba(61,214,255,.3);
+  border-radius: 14px; background: #06070c; padding: 8px 6px; max-height: 380px; overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(61,214,255,.1); }
+.feedline { display: flex; align-items: baseline; gap: 12px; padding: 9px 12px; border-radius: 9px;
+  text-decoration: none; animation: logfade .5s ease; }
+.feedline:hover { background: rgba(61,214,255,.06); }
+.feed-src { flex: none; width: 60px; font-family: var(--pixel); font-size: 8px; letter-spacing: .03em;
+  color: var(--cyan); text-transform: uppercase; padding-top: 2px; }
+.feed-title { flex: 1; font-family: var(--mono); font-size: 13px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feed-ago { flex: none; font-family: var(--mono); font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.feedline.dim .feed-title { color: var(--muted); }
+
 @media (max-width: 860px) {
   .funnel { grid-template-columns: repeat(2, 1fr); }
 }
@@ -916,11 +931,22 @@ def _live_console_section() -> str:
     </section>"""
 
 
+def _signal_feed_section() -> str:
+    """LIVE SIGNAL FEED — raw intel list filled by _LIVE_SCRIPT from /live (web mode only)."""
+    return """
+    <p class="section-label">&#9658; LIVE SIGNAL FEED</p>
+    <span class="section-sub">raw intel as it lands &mdash; newest first</span>
+    <section class="feed" id="signal-feed">
+      <a class="feedline dim"><span class="feed-src">&#8230;</span><span class="feed-title">connecting to feed&#8230;</span></a>
+    </section>"""
+
+
 # Polls /live and streams the agent's real recorded steps + a ticking heartbeat. Web-mode only.
 _LIVE_SCRIPT = """  <script>
   (function () {
     var statusEl = document.getElementById('live-status');
     var logEl = document.getElementById('live-log');
+    var feedEl = document.getElementById('signal-feed');
     var st = { updated: null, run_id: null, nextSec: null };
     function ago(iso) {
       var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -937,6 +963,16 @@ _LIVE_SCRIPT = """  <script>
       return s + 's';
     }
     function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    function srcTag(s) {
+      s = (s || '').toLowerCase();
+      if (s.indexOf('sequoia') >= 0) return 'Sequoia';
+      if (s.indexOf('a16z') >= 0) return 'a16z';
+      if (s.indexOf('edgar') >= 0 || s.indexOf('sec ') >= 0) return 'SEC';
+      if (s.indexOf('github') >= 0) return 'GitHub';
+      if (s.indexOf('hacker') >= 0) return 'HN';
+      if (s.indexOf('combinator') >= 0 || s.indexOf('yc ') >= 0) return 'YC';
+      return 'SIGNAL';
+    }
     function animateNum(id, target) {
       var e = document.getElementById(id); if (!e || target == null) return;
       var start = parseInt((e.textContent || '0').replace(/[^0-9]/g, '')) || 0;
@@ -964,6 +1000,14 @@ _LIVE_SCRIPT = """  <script>
         if (logEl && d.activity && d.activity.length) {
           logEl.innerHTML = d.activity.slice().reverse().slice(0, 9).map(function (a) {
             return '<div class="logline">\\u25BA ' + esc(a.msg) + ' <span class="lt">\\u00b7 ' + ago(a.t) + '</span></div>';
+          }).join('');
+        }
+        if (feedEl && d.feed && d.feed.length) {
+          feedEl.innerHTML = d.feed.map(function (s) {
+            var open = s.url ? ' href="' + esc(s.url) + '" target="_blank" rel="noopener"' : '';
+            return '<a class="feedline"' + open + '><span class="feed-src">' + esc(srcTag(s.source)) +
+              '</span><span class="feed-title">' + esc(s.title || s.company) +
+              '</span><span class="feed-ago">' + ago(s.t) + '</span></a>';
           }).join('');
         }
         renderStatus();
@@ -1080,6 +1124,7 @@ def render_dashboard(
     # Web-mode interactive pieces: LIVE badge + 'email me the brief' CTA + ASK LAUNCHY
     live_badge = '<span class="live-badge">LIVE</span>' if include_email_form else ""
     console_block = _live_console_section() if include_email_form else ""
+    feed_block = _signal_feed_section() if include_email_form else ""
     ask_block = _ask_section() if include_email_form else ""
     ask_script = _ASK_SCRIPT if include_email_form else ""
     live_script = _LIVE_SCRIPT if include_email_form else ""
@@ -1139,6 +1184,8 @@ def render_dashboard(
     {_funnel_section(metrics)}
 
     {trend_block}
+
+    {feed_block}
 
     <p class="section-label">&#9658; DEALS SURFACED &mdash; HIGH SCORES</p>
     <span class="section-sub">the output of the funnel, ranked by conviction</span>
