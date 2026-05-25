@@ -10,8 +10,6 @@ Built as the evaluation project for a Researcher role at LAUNCH (Jason Calacanis
 
 ## What it does
 
-Top firms leave tracks long before a TechCrunch headline. A Sequoia "partnering with" post. An a16z "investing in" page. A YC batch listing. A quiet SEC Form D weeks after a round closes. A repo picking up stars. A Hacker News thread. On their own, each one is noise. Stack a few on the same company in the same week and you've got a signal.
-
 LAUNCHY pulls from eight public sources every run, groups the raw events by company, and ranks what's left through a four-stage funnel:
 
 ```
