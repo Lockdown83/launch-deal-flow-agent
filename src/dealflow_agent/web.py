@@ -15,7 +15,7 @@ from .dashboard import render_dashboard
 from .emailer import send_email
 from .metrics import build_metrics
 from .outbound import build_drafts
-from .report import format_report
+from .report import format_report, format_report_html
 from .scoring import score_signals
 from .sources import collect_all_signals
 from .storage import save_run
@@ -38,6 +38,7 @@ _cache: dict = {
     "metrics": None,
     "drafts": [],
     "brief": "",
+    "brief_html": "",
     "editor_note": "",
     "ready": False,
     "updated": None,
@@ -66,12 +67,14 @@ def _run_pipeline() -> None:
     except Exception as exc:  # persistence is best-effort; never break the live view
         app.logger.warning("save_run failed: %s", exc)
     brief = format_report(opps, editor_note=note)
+    brief_html = format_report_html(opps, editor_note=note)
     with _lock:
         _cache.update(
             opps=opps,
             metrics=metrics,
             drafts=drafts,
             brief=brief,
+            brief_html=brief_html,
             editor_note=note,
             ready=True,
             updated=datetime.now(timezone.utc),
@@ -177,13 +180,14 @@ def request_report():
         return redirect(url_for("index", sent="rate"))
     with _lock:
         brief = _cache["brief"]
+        brief_html = _cache["brief_html"]
         ready = _cache["ready"]
     if not ready or not brief:
         return redirect(url_for("index", sent="err"))
     try:
         settings = get_settings()
         subject = f"LAUNCHY Deal Flow Brief — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-        send_email(settings, subject=subject, body=brief, to=email)
+        send_email(settings, subject=subject, body=brief, to=email, html=brief_html or None)
     except Exception as exc:
         app.logger.exception("email send failed: %s", exc)
         return redirect(url_for("index", sent="err"))

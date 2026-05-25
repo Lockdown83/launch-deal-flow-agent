@@ -11,29 +11,35 @@ from .config import Settings
 _RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 
-def send_email(settings: Settings, subject: str, body: str, to: str | None = None) -> None:
+def send_email(
+    settings: Settings, subject: str, body: str, to: str | None = None, html: str | None = None
+) -> None:
     """Send an email, preferring the Resend HTTP API.
 
     Cloud hosts (Railway, Vercel, etc.) block outbound SMTP, so when a Resend API key is
     configured we send over HTTPS. Falls back to Gmail SMTP locally (where SMTP works) if
     no Resend key is set. `to` overrides the default recipient (used by the web form).
+    `html`, when given, is sent as the rich version with `body` as the plain-text fallback.
     """
     recipient = to or settings.email_to
     if settings.resend_api_key:
-        _send_via_resend(settings, subject, body, recipient)
+        _send_via_resend(settings, subject, body, recipient, html)
     else:
-        _send_via_smtp(settings, subject, body, recipient)
+        _send_via_smtp(settings, subject, body, recipient, html)
 
 
-def _send_via_resend(settings: Settings, subject: str, body: str, recipient: str) -> None:
-    payload = json.dumps(
-        {
-            "from": settings.resend_from,
-            "to": [recipient],
-            "subject": subject,
-            "text": body,
-        }
-    ).encode("utf-8")
+def _send_via_resend(
+    settings: Settings, subject: str, body: str, recipient: str, html: str | None = None
+) -> None:
+    fields = {
+        "from": settings.resend_from,
+        "to": [recipient],
+        "subject": subject,
+        "text": body,
+    }
+    if html:
+        fields["html"] = html
+    payload = json.dumps(fields).encode("utf-8")
     req = urllib.request.Request(
         _RESEND_ENDPOINT,
         data=payload,
@@ -56,7 +62,9 @@ def _send_via_resend(settings: Settings, subject: str, body: str, recipient: str
         raise RuntimeError(f"Resend API error {exc.code}: {detail}") from exc
 
 
-def _send_via_smtp(settings: Settings, subject: str, body: str, recipient: str) -> None:
+def _send_via_smtp(
+    settings: Settings, subject: str, body: str, recipient: str, html: str | None = None
+) -> None:
     """Gmail SMTP — used only for local runs; cloud hosts block these ports."""
     missing = []
     if not settings.gmail_user:
@@ -82,6 +90,8 @@ def _send_via_smtp(settings: Settings, subject: str, body: str, recipient: str) 
     msg["From"] = settings.email_from
     msg["To"] = recipient
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")  # multipart/alternative: HTML preferred, text fallback
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
         smtp.login(gmail_user, gmail_app_password)

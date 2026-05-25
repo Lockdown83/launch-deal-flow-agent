@@ -10,7 +10,7 @@ from .dashboard import render_dashboard
 from .emailer import send_email
 from .metrics import build_metrics
 from .outbound import build_drafts
-from .report import format_report
+from .report import format_report, format_report_html
 from .scoring import score_signals
 from .sources import collect_all_signals
 from .storage import save_run
@@ -78,7 +78,7 @@ def main() -> None:
 
     if args.email:
         subject = f"LAUNCH Deal Flow Brief - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-        send_email(settings, subject=subject, body=body)
+        send_email(settings, subject=subject, body=body, html=format_report_html(opportunities, editor_note=note))
         print(f"Emailed report to {settings.email_to}")
     else:
         print("Email not sent. Use --email after configuring .env Gmail settings.")
