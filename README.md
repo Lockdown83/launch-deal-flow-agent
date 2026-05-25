@@ -12,7 +12,7 @@ Built as an evaluation artifact for a Researcher role at LAUNCH (Jason Calacanis
 
 Top firms telegraph their interest long before a TechCrunch headline: a Sequoia "partnering with" post, an a16z "investing in" page, a YC batch listing, a quiet SEC Form D filing weeks after a round closes, a repo gaining stars, a Hacker News thread. Individually these are noise. **Together they're a signal.**
 
-LAUNCHY scrapes six public sources every run, groups raw events by company, and ranks the result through a four-stage funnel — the spine of the whole product:
+LAUNCHY scrapes eight public sources every run, groups raw events by company, and ranks the result through a four-stage funnel — the spine of the whole product:
 
 ```
 REACH      →   RESEARCH     →   QUALITY        →   ACTION
@@ -29,7 +29,7 @@ One linear pipeline, run two ways — a CLI (`run_daily.py`) and the live web ap
 
 ```
 sources.collect_all_signals()   →   scoring.score_signals()   →   analyst.enrich_rationale()
-   six public sources                convergence ranking            LLM verdict + memo (in place)
+   eight public sources              convergence ranking            LLM verdict + memo (in place)
    → list[Signal]                    → list[Opportunity]            + analyst.editor_note()
                                                                               │
                           metrics.build_metrics()  +  outbound.build_drafts()
@@ -71,6 +71,8 @@ Each source module exposes a `collect() -> list[Signal]` and is self-guarded —
 | **GitHub** | Trending API — *emerging* AI / infra / dev-tool repos in a star band (established giants are filtered out; they aren't deal flow) |
 | **SEC EDGAR** | Form D full-text search — private-placement filings, often weeks before any press release; aggressively filtered down to operating companies (funds, SPVs, and real-estate vehicles dropped) |
 | **Hacker News** | Algolia API — founder/community validation, matched conservatively to avoid generic-name false positives |
+| **TechCrunch + GDELT** | Funding-news flow — "X raises $Y" headlines parsed into companies (precision-filtered: VC funds, editorial filler, and non-funding "raises" dropped) |
+| **SEC EDGAR (S-1 / Reg-CF)** | Full-text search beyond Form D — IPO-pipeline registrations + crowdfunding raises (ETFs / SPACs / vehicles filtered out) |
 
 Before scoring, a cleanup pass strips legal suffixes (`…, Inc.`), de-shouts ALL-CAPS EDGAR names, and drops address/SPV-style junk so the brief reads like real companies. YC directory listings are demoted in weight so the ~200 live batch companies only surface as qualified deals when another source corroborates them.
 
