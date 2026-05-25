@@ -40,6 +40,7 @@ _cache: dict = {
     "brief": "",
     "brief_html": "",
     "editor_note": "",
+    "run_id": None,
     "ready": False,
     "updated": None,
 }
@@ -49,25 +50,46 @@ _ask_times: deque[float] = deque()
 _started = False
 _start_lock = threading.Lock()
 
+# Streaming record of the agent's real actions, surfaced live on the dashboard console.
+_activity: deque[dict] = deque(maxlen=60)
+
+
+def _log(msg: str) -> None:
+    _activity.append({"t": datetime.now(timezone.utc).isoformat(), "msg": msg})
+
 
 def _run_pipeline() -> None:
-    """One full pass: collect -> score -> draft -> metrics -> persist; update the cache."""
+    """One full pass: collect -> score -> draft -> metrics -> persist; update the cache.
+
+    Logs each real step to the activity feed so the dashboard console shows the agent working.
+    """
     settings = get_settings()
+    _log("starting sweep — scanning Sequoia, a16z, YC, GitHub, SEC EDGAR, Hacker News")
     signals = collect_all_signals()
+    sources_monitored = len({s.source for s in signals})
+    _log(f"ingested {len(signals)} signals from {sources_monitored} sources")
     opps = score_signals(signals, min_score=settings.min_score)
+    _log(f"scored by cross-source convergence → {len(opps)} qualified above threshold")
     # The brain (NVIDIA NIM): per-deal verdict + memo, then the slate-level editor note.
     # Both are graceful no-ops without a key.
-    enrich_rationale(settings, opps)
+    n_enriched = enrich_rationale(settings, opps)
+    if n_enriched:
+        _log(f"NIM analyst wrote verdicts + memos for the top {n_enriched} deals")
     note = editor_note(settings, opps)
+    if note:
+        _log("editor note written — 'what matters this week'")
     drafts = build_drafts(opps)
-    sources_monitored = len({s.source for s in signals})
     metrics = build_metrics(signals, opps, sources_monitored, len(drafts))
+    run_id = None
     try:
-        save_run(signals, opps, sources_monitored)
+        stats = save_run(signals, opps, sources_monitored)
+        run_id = stats.get("run_id")
+        _log(f"saved run #{run_id} — {stats.get('new_signals', 0)} new signals since last sweep")
     except Exception as exc:  # persistence is best-effort; never break the live view
         app.logger.warning("save_run failed: %s", exc)
     brief = format_report(opps, editor_note=note)
     brief_html = format_report_html(opps, editor_note=note)
+    _log(f"brief + dashboard refreshed — {len(drafts)} outbound drafts queued for review")
     with _lock:
         _cache.update(
             opps=opps,
@@ -76,6 +98,7 @@ def _run_pipeline() -> None:
             brief=brief,
             brief_html=brief_html,
             editor_note=note,
+            run_id=run_id,
             ready=True,
             updated=datetime.now(timezone.utc),
         )
@@ -217,6 +240,45 @@ def ask():
     if not ans:
         ans = "Ask LAUNCHY is offline here (no model key configured) — it answers live on the deployed site."
     return {"answer": ans}
+
+
+def _next_sweep_seconds(updated) -> int | None:
+    """Seconds until the next scheduled full sweep (the background loop sleeps REFRESH_HOURS)."""
+    if not updated:
+        return None
+    interval = max(600.0, REFRESH_HOURS * 3600.0)
+    return max(0, int(updated.timestamp() + interval - time.time()))
+
+
+@app.get("/live")
+def live():
+    """Live agent state for the dashboard's activity console + heartbeat + counters."""
+    with _lock:
+        updated = _cache["updated"]
+        ready = _cache["ready"]
+        metrics = _cache["metrics"]
+        run_id = _cache["run_id"]
+        drafts_n = len(_cache["drafts"])
+        activity = list(_activity)
+    counters = {}
+    if metrics is not None:
+        counters = {
+            "signals": metrics.signals_ingested,
+            "qualified": metrics.qualified_deals,
+            "companies": metrics.companies_tracked,
+            "drafts": drafts_n,
+            "sources": metrics.sources_monitored,
+            "new_24h": metrics.new_companies_this_run,
+        }
+    return {
+        "ready": ready,
+        "updated": updated.isoformat() if updated else None,
+        "run_id": run_id,
+        "refresh_hours": REFRESH_HOURS,
+        "next_sweep_sec": _next_sweep_seconds(updated),
+        "activity": activity,
+        "counters": counters,
+    }
 
 
 @app.get("/health")
