@@ -1005,6 +1005,8 @@ _LIVE_SCRIPT = """  <script>
       if (s.indexOf('github') >= 0) return 'GitHub';
       if (s.indexOf('hacker') >= 0) return 'HN';
       if (s.indexOf('combinator') >= 0 || s.indexOf('yc ') >= 0) return 'YC';
+      if (s.indexOf('techcrunch') >= 0) return 'TC';
+      if (s.indexOf('gdelt') >= 0 || s.indexOf('news') >= 0) return 'NEWS';
       return 'SIGNAL';
     }
     function animateNum(id, target) {
