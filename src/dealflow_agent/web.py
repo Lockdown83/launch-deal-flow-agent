@@ -4,7 +4,7 @@ import os
 import re
 import threading
 import time
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 from flask import Flask, redirect, request, url_for
@@ -69,11 +69,19 @@ def _run_pipeline() -> None:
     signals = collect_all_signals()
     sources_monitored = len({s.source for s in signals})
     _log(f"ingested {len(signals)} signals from {sources_monitored} sources")
-    # Freshest raw signals for the live feed (newest first).
+    # Live feed: newest first, but capped per source so one feed (e.g. a16z) can't bury the
+    # others — shows the breadth of what the agent monitors (all 8 sources).
+    _by_src: dict[str, list] = defaultdict(list)
+    for s in sorted(signals, key=lambda s: s.observed_at, reverse=True):
+        _by_src[s.source].append(s)
+    _picked: list = []
+    for items in _by_src.values():
+        _picked.extend(items[:4])
+    _picked.sort(key=lambda s: s.observed_at, reverse=True)
     feed = [
         {"company": s.company, "source": s.source, "title": s.title, "url": s.url,
          "t": s.observed_at.astimezone(timezone.utc).isoformat()}
-        for s in sorted(signals, key=lambda s: s.observed_at, reverse=True)[:20]
+        for s in _picked[:24]
     ]
     opps = score_signals(signals, min_score=settings.min_score)
     _log(f"scored by cross-source convergence → {len(opps)} qualified above threshold")
