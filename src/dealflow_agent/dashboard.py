@@ -887,7 +887,7 @@ def _ask_section() -> str:
       <div class="ask-chips">
         <button class="ask-chip" type="button">What's the most urgent deal this week?</button>
         <button class="ask-chip" type="button">Which deals are in fintech?</button>
-        <button class="ask-chip" type="button">What changed since the last sweep?</button>
+        <button class="ask-chip" type="button">What's driving the top deal?</button>
       </div>
       <div class="ask-answer" id="ask-answer" aria-live="polite">&#9658; tap a question or ask your own.</div>
     </section>"""
