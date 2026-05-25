@@ -806,6 +806,30 @@ footer { color: var(--muted); font-size: 12px; margin-top: 48px; text-align: cen
 .ask-answer { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(61,214,255,.25);
   font: 14px/1.7 var(--mono); color: #cfd3de; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.7em; }
 
+/* LIVE agent-activity console (web mode only) — the Polsia-style "watch it working" strip */
+.console { margin: 22px 0 6px; border-radius: 14px; padding: 16px 18px;
+  background: linear-gradient(180deg, rgba(57,255,20,.05) 0%, rgba(57,255,20,0) 55%), #06070c;
+  border: 1px solid rgba(57,255,20,.4);
+  box-shadow: 0 0 28px rgba(57,255,20,.10), inset 0 1px 0 rgba(57,255,20,.12); font-family: var(--mono); }
+.console-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); flex: none;
+  box-shadow: 0 0 9px var(--green); animation: livepulse 1.4s ease-in-out infinite; }
+@keyframes livepulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.6); } }
+.console-title { font-family: var(--pixel); font-size: 11px; color: var(--green); letter-spacing: .08em; }
+.console-status { margin-left: auto; font-size: 12px; color: var(--muted); letter-spacing: .02em;
+  font-variant-numeric: tabular-nums; }
+.console-stats { display: flex; gap: 20px; flex-wrap: wrap; margin: 12px 0 2px; font-size: 11px;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.console-stats b { color: var(--green); font-size: 15px; font-variant-numeric: tabular-nums; margin-right: 6px;
+  text-shadow: 0 0 8px rgba(57,255,20,.4); }
+.console-log { margin-top: 10px; border-top: 1px solid rgba(57,255,20,.16); padding-top: 10px;
+  display: flex; flex-direction: column; gap: 4px; max-height: 176px; overflow: hidden; }
+.logline { font-size: 12.5px; color: var(--green-soft); line-height: 1.5; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; animation: logfade .55s ease; }
+.logline .lt { color: var(--muted); }
+.logline.dim { color: var(--muted); }
+@keyframes logfade { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
 @media (max-width: 860px) {
   .funnel { grid-template-columns: repeat(2, 1fr); }
 }
@@ -869,6 +893,85 @@ _ASK_SCRIPT = """  <script>
     }
     btn.addEventListener('click', ask);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
+  })();
+  </script>"""
+
+
+def _live_console_section() -> str:
+    """LIVE agent-activity console — a shell filled by _LIVE_SCRIPT polling /live (web mode only)."""
+    return """
+    <section class="console" aria-label="Live agent activity">
+      <div class="console-head">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span class="console-title">AGENT ACTIVITY</span>
+        <span class="console-status" id="live-status">connecting&#8230;</span>
+      </div>
+      <div class="console-stats">
+        <span><b id="c-signals">&#8212;</b>signals</span>
+        <span><b id="c-qualified">&#8212;</b>qualified</span>
+        <span><b id="c-drafts">&#8212;</b>drafts</span>
+        <span><b id="c-sources">&#8212;</b>sources</span>
+      </div>
+      <div class="console-log" id="live-log"><div class="logline dim">&#9658; connecting to agent&#8230;</div></div>
+    </section>"""
+
+
+# Polls /live and streams the agent's real recorded steps + a ticking heartbeat. Web-mode only.
+_LIVE_SCRIPT = """  <script>
+  (function () {
+    var statusEl = document.getElementById('live-status');
+    var logEl = document.getElementById('live-log');
+    var st = { updated: null, run_id: null, nextSec: null };
+    function ago(iso) {
+      var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+      if (s < 60) return Math.floor(s) + 's ago';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    }
+    function dur(sec) {
+      if (sec == null) return null;
+      var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+      if (h > 0) return h + 'h ' + m + 'm';
+      if (m > 0) return m + 'm ' + s + 's';
+      return s + 's';
+    }
+    function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    function animateNum(id, target) {
+      var e = document.getElementById(id); if (!e || target == null) return;
+      var start = parseInt((e.textContent || '0').replace(/[^0-9]/g, '')) || 0;
+      target = Number(target); var t0 = performance.now(), ms = 600;
+      function step(t) {
+        var p = Math.min(1, (t - t0) / ms);
+        e.textContent = Math.round(start + (target - start) * p).toLocaleString();
+        if (p < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+    function renderStatus() {
+      var p = [];
+      if (st.updated) p.push('last sweep ' + ago(st.updated));
+      if (st.run_id) p.push('run #' + st.run_id);
+      var d = dur(st.nextSec); if (d) p.push('next sweep in ' + d);
+      if (statusEl) statusEl.textContent = p.join('  \\u00b7  ') || 'idle';
+    }
+    function poll() {
+      fetch('/live').then(function (r) { return r.json(); }).then(function (d) {
+        st.updated = d.updated; st.run_id = d.run_id; st.nextSec = d.next_sweep_sec;
+        var c = d.counters || {};
+        animateNum('c-signals', c.signals); animateNum('c-qualified', c.qualified);
+        animateNum('c-drafts', c.drafts); animateNum('c-sources', c.sources);
+        if (logEl && d.activity && d.activity.length) {
+          logEl.innerHTML = d.activity.slice().reverse().slice(0, 9).map(function (a) {
+            return '<div class="logline">\\u25BA ' + esc(a.msg) + ' <span class="lt">\\u00b7 ' + ago(a.t) + '</span></div>';
+          }).join('');
+        }
+        renderStatus();
+      }).catch(function () {});
+    }
+    poll();
+    setInterval(poll, 5000);
+    setInterval(function () { if (st.nextSec != null && st.nextSec > 0) st.nextSec--; renderStatus(); }, 1000);
   })();
   </script>"""
 
@@ -976,8 +1079,10 @@ def render_dashboard(
 
     # Web-mode interactive pieces: LIVE badge + 'email me the brief' CTA + ASK LAUNCHY
     live_badge = '<span class="live-badge">LIVE</span>' if include_email_form else ""
+    console_block = _live_console_section() if include_email_form else ""
     ask_block = _ask_section() if include_email_form else ""
     ask_script = _ASK_SCRIPT if include_email_form else ""
+    live_script = _LIVE_SCRIPT if include_email_form else ""
     cta_block = ""
     if include_email_form:
         notice_html = ""
@@ -1023,6 +1128,7 @@ def render_dashboard(
       signals into net-new qualified deal flow &mdash; reach, research, quality, action.</p>
     <p class="generated">GENERATED {now}</p>
 
+    {console_block}
     {hero}
     {editor_block}
     {cta_block}
@@ -1045,5 +1151,6 @@ def render_dashboard(
     <footer>LAUNCHY &middot; YOUR VC DEAL-FLOW AGENT &middot; {now}<br>OUTBOUND IS DRAFTED, NEVER AUTO-SENT. &#9658; INSERT COIN TO CONTINUE</footer>
   </main>
   {ask_script}
+  {live_script}
 </body>
 </html>"""
